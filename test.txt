@@ -1,0 +1,18 @@
+From the Dashboard, click on each card:
+  ┌─────────────────────┬──────────────────────────────────────────────────────────────────────┐
+  │       Feature       │                             What to Test                             │
+  ├─────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ Portfolio Dashboard │ View charts, click "Get AI Recommendation", create a portfolio       │
+  ├─────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ Risk Assessment     │ Complete the 4-section questionnaire, get your risk score            │
+  ├─────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ Import Transactions │ Upload a CSV file or click "Connect Bank Account"                    │
+  ├─────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ Alerts              │ View notifications (create test alerts from Fraud Detection)         │
+  ├─────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ Fraud Detection     │ Add transactions, click "Analyze with Rules Engine"                  │
+  ├─────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ Credit Scoring      │ Fill your profile, click "Calculate Score" to see the real algorithm │
+  ├─────────────────────┼──────────────────────────────────────────────────────────────────────┤
+  │ Settings            │ Update profile, manage notification preferences                      │
+  └─────────────────────┴──────────────────────────────────────────────────────────────────────┘

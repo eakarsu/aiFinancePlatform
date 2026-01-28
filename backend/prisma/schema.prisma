@@ -1,0 +1,450 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============== CORE MODELS ==============
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  password      String
+  firstName     String
+  lastName      String
+  phone         String?
+  role          UserRole @default(USER)
+  notificationPreferences Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Robo-Advisor Relations
+  portfolios    Portfolio[]
+  riskProfile   RiskProfile?
+  investments   Investment[]
+
+  // Credit Score Relations
+  creditProfile CreditProfile?
+
+  // Fraud Detection Relations
+  transactions  Transaction[]
+  fraudAlerts   FraudAlert[]
+
+  // Notifications
+  notifications Notification[]
+
+  // Risk Questionnaire
+  riskQuestionnaire RiskQuestionnaire?
+
+  // Transaction Imports
+  transactionImports TransactionImport[]
+
+  // Plaid Connections
+  plaidConnections PlaidConnection[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  ANALYST
+}
+
+// ============== ROBO-ADVISOR MODELS ==============
+
+model RiskProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+
+  riskTolerance   RiskLevel @default(MODERATE)
+  investmentGoal  String    // retirement, growth, income, preservation
+  timeHorizon     Int       // years
+  monthlyIncome   Float?
+  monthlyExpenses Float?
+  emergencyFund   Float?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("risk_profiles")
+}
+
+enum RiskLevel {
+  CONSERVATIVE
+  MODERATE
+  AGGRESSIVE
+}
+
+model Portfolio {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  name            String
+  type            PortfolioType @default(BALANCED)
+  totalValue      Float    @default(0)
+  cashBalance     Float    @default(0)
+
+  // AI Recommendations
+  aiScore         Float?   // AI confidence score
+  aiRecommendation String? // Latest AI recommendation
+  lastRebalanced  DateTime?
+
+  holdings        Holding[]
+  investments     Investment[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("portfolios")
+}
+
+enum PortfolioType {
+  CONSERVATIVE
+  BALANCED
+  GROWTH
+  AGGRESSIVE
+  INCOME
+}
+
+model Holding {
+  id          String   @id @default(uuid())
+  portfolioId String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
+
+  symbol      String   // Stock/ETF symbol
+  name        String
+  assetType   AssetType
+  shares      Float
+  avgCost     Float
+  currentPrice Float?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("holdings")
+}
+
+enum AssetType {
+  STOCK
+  ETF
+  BOND
+  CRYPTO
+  CASH
+}
+
+model Investment {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  portfolioId String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id])
+
+  type        InvestmentType
+  amount      Float
+  symbol      String?
+  shares      Float?
+  price       Float?
+
+  createdAt   DateTime @default(now())
+
+  @@map("investments")
+}
+
+enum InvestmentType {
+  DEPOSIT
+  WITHDRAWAL
+  BUY
+  SELL
+  DIVIDEND
+  REBALANCE
+}
+
+// ============== CREDIT SCORING MODELS ==============
+
+model CreditProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+
+  // Traditional Data
+  annualIncome    Float?
+  employmentStatus String?
+  employmentYears Float?
+  housingStatus   String?  // own, rent, mortgage
+  monthlyRent     Float?
+
+  // Alternative Data (AI Credit Scoring)
+  rentPaymentHistory    Int?  // months of on-time payments
+  utilityPaymentHistory Int?
+  phonePaymentHistory   Int?
+  bankAccountAge        Int?  // months
+  averageBalance        Float?
+  overdraftCount        Int?
+
+  // AI Generated Score
+  aiCreditScore   Int?     // 300-850
+  aiScoreDate     DateTime?
+  aiConfidence    Float?   // 0-100%
+  aiFactors       Json?    // Factors affecting score
+
+  // Traditional Score (if available)
+  traditionalScore Int?
+
+  creditHistories CreditHistory[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("credit_profiles")
+}
+
+model CreditHistory {
+  id              String   @id @default(uuid())
+  creditProfileId String
+  creditProfile   CreditProfile @relation(fields: [creditProfileId], references: [id])
+
+  type            String   // rent, utility, phone, loan
+  provider        String   // Company name
+  monthlyAmount   Float
+  onTimePayments  Int
+  latePayments    Int
+  missedPayments  Int
+  startDate       DateTime
+  endDate         DateTime?
+
+  createdAt       DateTime @default(now())
+
+  @@map("credit_histories")
+}
+
+// ============== FRAUD DETECTION MODELS ==============
+
+model Transaction {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  type        TransactionType
+  amount      Float
+  currency    String   @default("USD")
+  merchant    String?
+  category    String?
+  location    String?
+  ipAddress   String?
+  deviceId    String?
+
+  // AI Fraud Analysis
+  fraudScore  Float?   // 0-100 (higher = more likely fraud)
+  fraudFlags  Json?    // Array of flags
+  isBlocked   Boolean  @default(false)
+  reviewStatus ReviewStatus @default(PENDING)
+
+  createdAt   DateTime @default(now())
+
+  fraudAlerts FraudAlert[]
+
+  @@map("transactions")
+}
+
+enum TransactionType {
+  PURCHASE
+  TRANSFER
+  WITHDRAWAL
+  DEPOSIT
+  REFUND
+}
+
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FLAGGED
+}
+
+model FraudAlert {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+
+  alertType     AlertType
+  severity      Severity
+  description   String
+  aiConfidence  Float    // 0-100%
+
+  isResolved    Boolean  @default(false)
+  resolvedAt    DateTime?
+  resolvedBy    String?
+  resolution    String?
+
+  createdAt     DateTime @default(now())
+
+  @@map("fraud_alerts")
+}
+
+enum AlertType {
+  UNUSUAL_AMOUNT
+  UNUSUAL_LOCATION
+  UNUSUAL_TIME
+  VELOCITY_CHECK
+  DEVICE_MISMATCH
+  PATTERN_ANOMALY
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ============== AI ANALYSIS LOGS ==============
+
+model AIAnalysisLog {
+  id          String   @id @default(uuid())
+  module      String   // robo_advisor, credit_score, fraud_detection
+  userId      String?
+  inputData   Json
+  outputData  Json
+  modelUsed   String
+  confidence  Float?
+  processingTime Int?  // milliseconds
+
+  createdAt   DateTime @default(now())
+
+  @@map("ai_analysis_logs")
+}
+
+// ============== NOTIFICATIONS/ALERTS ==============
+
+model Notification {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  type        String   // FRAUD_HIGH_RISK, CREDIT_SCORE_DROP, PORTFOLIO_DRIFT, etc.
+  category    String   // fraud, credit, portfolio, security, transaction, general
+  severity    Severity
+  title       String
+  message     String
+  details     Json?
+
+  isRead      Boolean  @default(false)
+  isDismissed Boolean  @default(false)
+  isPositive  Boolean  @default(false)
+  actionRequired Boolean @default(false)
+
+  expiresAt   DateTime?
+  readAt      DateTime?
+  dismissedAt DateTime?
+
+  createdAt   DateTime @default(now())
+
+  @@map("notifications")
+}
+
+// ============== RISK ASSESSMENT QUESTIONNAIRE ==============
+
+model RiskQuestionnaire {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+
+  // Demographics
+  age             Int?
+  dependents      Int?
+
+  // Financial situation
+  annualIncome    Float?
+  netWorth        Float?
+  liquidAssets    Float?
+  monthlyExpenses Float?
+  debtLevel       String?   // none, low, moderate, high
+  hasEmergencyFund Boolean?
+  emergencyFundMonths Int?
+
+  // Risk attitudes
+  riskAttitude    Int?      // 1-10 scale
+  lossTolerance   String?   // none, small, moderate, large
+  investmentExperience String? // none, beginner, intermediate, advanced
+
+  // Goals and timeline
+  primaryGoal     String?   // retirement, growth, income, preservation, education
+  timeHorizon     Int?      // years
+  incomeStability String?   // very_stable, stable, variable, unstable
+
+  // Behavioral questions
+  marketDropReaction String? // sell_all, sell_some, hold, buy_more
+  preferredApproach String?  // guaranteed_low, moderate_growth, high_growth
+
+  // Calculated results
+  riskScore       Int?      // 0-100
+  riskTolerance   String?   // CONSERVATIVE, MODERATE, AGGRESSIVE
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("risk_questionnaires")
+}
+
+// ============== TRANSACTION IMPORTS ==============
+
+model TransactionImport {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  source      String   // csv, plaid, manual
+  fileName    String?
+  status      ImportStatus @default(PENDING)
+
+  totalRecords Int     @default(0)
+  processedRecords Int @default(0)
+  failedRecords Int   @default(0)
+
+  errorLog    Json?
+  summary     Json?
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@map("transaction_imports")
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  PARTIAL
+}
+
+// ============== PLAID INTEGRATION ==============
+
+model PlaidConnection {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  accessToken     String   // Encrypted Plaid access token
+  itemId          String   // Plaid item ID
+  institutionId   String?
+  institutionName String?
+
+  accountIds      Json?    // Array of connected account IDs
+  consentExpiry   DateTime?
+  lastSync        DateTime?
+  status          String   @default("active") // active, expired, error
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("plaid_connections")
+}
