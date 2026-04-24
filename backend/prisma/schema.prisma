@@ -17,6 +17,10 @@ model User {
   phone         String?
   role          UserRole @default(USER)
   notificationPreferences Json?
+  resetToken         String?
+  resetTokenExpiry   DateTime?
+  twoFactorSecret    String?
+  twoFactorEnabled   Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -43,6 +47,17 @@ model User {
 
   // Plaid Connections
   plaidConnections PlaidConnection[]
+
+  // New Feature Relations
+  stockScreeners    StockScreener[]
+  cryptoAnalyses    CryptoAnalysis[]
+  loanApplications  LoanApplication[]
+  insurancePolicies InsurancePolicy[]
+  retirementPlans   RetirementPlan[]
+  budgetPlans       BudgetPlan[]
+  expenses          Expense[]
+  financialGoals    FinancialGoal[]
+  bills             Bill[]
 
   @@map("users")
 }
@@ -447,4 +462,319 @@ model PlaidConnection {
   updatedAt       DateTime @updatedAt
 
   @@map("plaid_connections")
+}
+
+// ============== STOCK SCREENER MODELS ==============
+
+model StockScreener {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  symbol          String
+  companyName     String
+  sector          String?
+  industry        String?
+  marketCap       Float?
+  peRatio         Float?
+  pbRatio         Float?
+  dividendYield   Float?
+  eps             Float?
+  revenueGrowth   Float?
+  profitMargin    Float?
+  debtToEquity    Float?
+  currentPrice    Float?
+  targetPrice     Float?
+  analystRating   String?
+
+  // AI Analysis
+  aiScore         Int?      // 0-100
+  aiSentiment     String?   // bullish, bearish, neutral
+  aiAnalysis      Json?
+  aiRecommendation String?  // strong_buy, buy, hold, sell, strong_sell
+
+  isWatchlisted   Boolean   @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("stock_screeners")
+}
+
+// ============== CRYPTO ANALYZER MODELS ==============
+
+model CryptoAnalysis {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  symbol          String   // BTC, ETH, etc.
+  name            String
+  currentPrice    Float?
+  priceChange24h  Float?
+  priceChange7d   Float?
+  marketCap       Float?
+  volume24h       Float?
+  circulatingSupply Float?
+  totalSupply     Float?
+  allTimeHigh     Float?
+  allTimeLow      Float?
+
+  // AI Analysis
+  aiScore         Int?      // 0-100
+  aiRiskLevel     String?   // low, medium, high, very_high
+  aiTrend         String?   // bullish, bearish, neutral, volatile
+  aiAnalysis      Json?
+  aiPricePrediction Json?   // short_term, medium_term, long_term predictions
+
+  isTracked       Boolean   @default(false)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("crypto_analyses")
+}
+
+// ============== LOAN ADVISOR MODELS ==============
+
+model LoanApplication {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  loanType        String   // personal, mortgage, auto, student, business
+  loanAmount      Float
+  loanPurpose     String?
+  loanTerm        Int      // months
+  desiredRate     Float?
+
+  // Applicant Info
+  annualIncome    Float?
+  employmentStatus String?
+  employmentYears Float?
+  creditScore     Int?
+  existingDebts   Float?
+  monthlyExpenses Float?
+  collateralValue Float?
+  downPayment     Float?
+
+  // AI Analysis
+  aiApprovalLikelihood Int?  // 0-100%
+  aiRecommendedRate   Float?
+  aiRecommendedTerm   Int?
+  aiAnalysis          Json?
+  aiBestLenders       Json?   // Array of recommended lenders
+  aiMonthlyPayment    Float?
+  aiTotalInterest     Float?
+
+  status          String   @default("draft") // draft, submitted, approved, rejected
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("loan_applications")
+}
+
+// ============== INSURANCE OPTIMIZER MODELS ==============
+
+model InsurancePolicy {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  insuranceType   String   // health, life, auto, home, disability, umbrella
+  provider        String?
+  policyNumber    String?
+  coverageAmount  Float?
+  premium         Float?    // monthly
+  deductible      Float?
+  startDate       DateTime?
+  endDate         DateTime?
+
+  // Coverage Details
+  coverageDetails Json?
+  beneficiaries   Json?
+
+  // AI Analysis
+  aiCoverageScore Int?      // 0-100 adequacy score
+  aiPremiumRating String?   // excellent, good, fair, poor
+  aiGaps          Json?     // Identified coverage gaps
+  aiRecommendations Json?   // Suggested improvements
+  aiAlternatives  Json?     // Better policy options
+  aiSavingsPotential Float?
+
+  isActive        Boolean   @default(true)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("insurance_policies")
+}
+
+// ============== RETIREMENT PLANNER MODELS ==============
+
+model RetirementPlan {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  currentAge      Int
+  retirementAge   Int
+  lifeExpectancy  Int      @default(90)
+  currentSavings  Float
+  monthlyContribution Float?
+  expectedReturn  Float?   // annual %
+  inflationRate   Float    @default(3)
+
+  // Income Sources
+  socialSecurityAge Int?
+  socialSecurityAmount Float?
+  pensionAmount   Float?
+  otherIncome     Float?
+
+  // Expenses
+  currentExpenses Float?
+  retirementExpenses Float?
+  healthcareCosts Float?
+
+  // Goals
+  desiredRetirementIncome Float?
+  legacyGoal      Float?   // Amount to leave to heirs
+
+  // AI Analysis
+  aiReadinessScore Int?    // 0-100
+  aiProjectedSavings Float?
+  aiIncomeGap     Float?
+  aiRecommendations Json?
+  aiMilestones    Json?    // Year-by-year projections
+  aiRiskAssessment Json?
+  aiActionItems   Json?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("retirement_plans")
+}
+
+// ============== BUDGET COACH MODELS ==============
+
+model BudgetPlan {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  name            String
+  period          String   @default("monthly") // weekly, monthly, yearly
+  totalIncome     Float
+  totalBudget     Float
+
+  // Categories
+  categories      Json     // Array of {name, budgeted, spent, color}
+
+  // AI Analysis
+  aiHealthScore   Int?     // 0-100
+  aiInsights      Json?
+  aiRecommendations Json?
+  aiSavingsGoal   Float?
+  aiOptimizations Json?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("budget_plans")
+}
+
+model Expense {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  amount          Float
+  category        String
+  description     String?
+  merchant        String?
+  date            DateTime
+  isRecurring     Boolean  @default(false)
+  recurringFrequency String?
+
+  // AI Categorization
+  aiCategory      String?
+  aiConfidence    Float?
+
+  createdAt       DateTime @default(now())
+
+  @@map("expenses")
+}
+
+// ============== GOAL TRACKER MODELS ==============
+
+model FinancialGoal {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  name            String
+  description     String?
+  category        String   // savings, investment, debt_payoff, purchase, emergency_fund, retirement
+  targetAmount    Float
+  currentAmount   Float    @default(0)
+  deadline        DateTime?
+  priority        Int      @default(1) // 1-5, 1 is highest
+
+  // Progress
+  monthlyContribution Float?
+  autoSave        Boolean  @default(false)
+
+  // AI Analysis
+  aiProgress      Int?     // percentage
+  aiOnTrack       Boolean?
+  aiProjectedCompletion DateTime?
+  aiRecommendations Json?
+  aiMilestones    Json?
+
+  status          String   @default("active") // active, completed, paused, abandoned
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("financial_goals")
+}
+
+// ============== BILL NEGOTIATOR MODELS ==============
+
+model Bill {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id])
+
+  billType        String   // cable, internet, phone, insurance, subscription, utility
+  provider        String
+  currentAmount   Float
+  originalAmount  Float?
+  frequency       String   @default("monthly")
+  dueDate         Int?     // Day of month
+  accountNumber   String?
+
+  // Contract Info
+  contractStart   DateTime?
+  contractEnd     DateTime?
+  isUnderContract Boolean  @default(false)
+
+  // Negotiation History
+  lastNegotiated  DateTime?
+  negotiationHistory Json?  // Array of past negotiations
+
+  // AI Analysis
+  aiSavingsEstimate Float?
+  aiNegotiationScript String?
+  aiAlternatives  Json?    // Competitor offers
+  aiTips          Json?
+  aiSuccessLikelihood Int? // 0-100%
+
+  status          String   @default("active") // active, negotiating, cancelled
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("bills")
 }

@@ -1,11 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { ClipboardList, CheckCircle, ArrowRight, AlertTriangle, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
   getRiskQuestionnaire,
   saveRiskQuestionnaire,
   getFullRiskAssessment,
-  getRiskQuestions
+  getRiskQuestions,
+  aiAnalyzeRisk,
+  exportRiskAssessment,
+  downloadExport
 } from '../services/api';
+import ExportButton from '../components/ExportButton';
+import ConfirmDialog from '../components/ConfirmDialog';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 
 function RiskAssessment() {
   const navigate = useNavigate();
@@ -16,6 +23,12 @@ function RiskAssessment() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [showResults, setShowResults] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const aiResultsRef = useRef(null);
+
+  // Confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
 
   useEffect(() => {
     loadData();
@@ -92,9 +105,39 @@ function RiskAssessment() {
   };
 
   const handleRetake = () => {
-    setShowResults(false);
-    setCurrentSection(0);
-    setAssessment(null);
+    setConfirmDialog({
+      open: true,
+      title: 'Retake Assessment',
+      message: 'Are you sure you want to retake the risk assessment? Your current results will be replaced.',
+      onConfirm: () => {
+        setShowResults(false);
+        setCurrentSection(0);
+        setAssessment(null);
+        setAiAnalysis(null);
+        setConfirmDialog({ open: false, title: '', message: '', onConfirm: null });
+      }
+    });
+  };
+
+  const handleAIAnalyze = async () => {
+    setAiLoading(true);
+    try {
+      const response = await aiAnalyzeRisk();
+      setAiAnalysis(response.data);
+      // Auto-scroll to AI results after rendering
+      setTimeout(() => {
+        aiResultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    } catch (error) {
+      console.error('AI analysis failed:', error);
+      alert('Failed to generate AI analysis. Make sure the AI API key is configured.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleExport = (format) => {
+    downloadExport(exportRiskAssessment, format, 'risk-assessment');
   };
 
   const renderQuestion = (question) => {
@@ -199,13 +242,25 @@ function RiskAssessment() {
   };
 
   if (loading) {
-    return <div className="loading">Loading questionnaire...</div>;
+    return (
+      <div className="risk-assessment questionnaire">
+        <div className="questionnaire-header">
+          <h1>Risk Assessment Questionnaire</h1>
+          <p>Help us understand your financial situation and risk tolerance to provide personalized recommendations.</p>
+        </div>
+        <LoadingSkeleton variant="detail-panel" count={1} />
+        <LoadingSkeleton variant="card" count={2} />
+      </div>
+    );
   }
 
   if (showResults && assessment) {
     return (
       <div className="risk-assessment results">
-        <h1>Your Risk Assessment Results</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <h1>Your Risk Assessment Results</h1>
+          <ExportButton onExport={handleExport} />
+        </div>
 
         {/* Risk Score Display */}
         <div className="score-display">
@@ -263,9 +318,9 @@ function RiskAssessment() {
               {assessment.insights.map((insight, index) => (
                 <div key={index} className={`insight-card ${insight.type}`}>
                   <span className="insight-icon">
-                    {insight.type === 'success' ? '✓' :
-                     insight.type === 'warning' ? '!' :
-                     insight.type === 'caution' ? '⚠' : 'i'}
+                    {insight.type === 'success' ? <CheckCircle size={18} /> :
+                     insight.type === 'warning' ? <AlertTriangle size={18} /> :
+                     insight.type === 'caution' ? <AlertTriangle size={18} /> : <Info size={18} />}
                   </span>
                   <div className="insight-content">
                     <h4>{insight.title}</h4>
@@ -313,6 +368,97 @@ function RiskAssessment() {
                 {assessment.portfolioRecommendation.expectedReturn?.high}%
               </strong>
             </div>
+
+              </div>
+        )}
+
+        {/* AI Analysis Button */}
+        {!aiAnalysis && (
+          <div style={{ textAlign: 'center', margin: '2rem 0' }}>
+            <button
+              className="btn-primary"
+              onClick={handleAIAnalyze}
+              disabled={aiLoading}
+              style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}
+            >
+              {aiLoading ? 'Analyzing with AI...' : 'Get AI-Powered Analysis'}
+            </button>
+            {aiLoading && (
+              <p style={{ color: '#666', marginTop: '0.75rem', fontSize: '0.9rem' }}>
+                AI is analyzing your risk profile. This may take a few seconds...
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* AI Analysis Results */}
+        {aiAnalysis && (
+          <div ref={aiResultsRef} className="portfolio-analysis-card">
+            <div className="portfolio-header">
+              <h3>AI-Powered Risk Analysis</h3>
+              <button className="btn-close" onClick={() => setAiAnalysis(null)}>×</button>
+            </div>
+
+            {/* AI Interpretation */}
+            {aiAnalysis.interpretation && (
+              <div className="portfolio-insights">
+                <h4 style={{ color: '#1a237e', marginBottom: '0.5rem' }}>{aiAnalysis.interpretation.title}</h4>
+                <p>{aiAnalysis.interpretation.description}</p>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
+                  <div>
+                    <h5 style={{ color: '#4CAF50', marginBottom: '0.25rem' }}>Suitable Investments</h5>
+                    <p style={{ fontSize: '0.9rem', color: '#555' }}>{aiAnalysis.interpretation.suitable}</p>
+                  </div>
+                  <div>
+                    <h5 style={{ color: '#FF9800', marginBottom: '0.25rem' }}>Things to Consider</h5>
+                    <p style={{ fontSize: '0.9rem', color: '#555' }}>{aiAnalysis.interpretation.caution}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* AI Insights */}
+            {aiAnalysis.insights?.length > 0 && (
+              <div style={{ marginTop: '1rem' }}>
+                <h4 style={{ color: '#1a237e', marginBottom: '0.5rem' }}>AI Insights</h4>
+                {aiAnalysis.insights.map((insight, i) => (
+                  <div key={i} className={`insight-card ${insight.type}`} style={{ display: 'flex', gap: '0.75rem', padding: '0.75rem', marginBottom: '0.5rem', borderRadius: '8px', background: '#f5f7fa' }}>
+                    <span>
+                      {insight.type === 'success' ? <CheckCircle size={18} /> :
+                       insight.type === 'warning' ? <AlertTriangle size={18} /> :
+                       insight.type === 'caution' ? <AlertTriangle size={18} /> : <Info size={18} />}
+                    </span>
+                    <div>
+                      <h5 style={{ marginBottom: '0.25rem' }}>{insight.title}</h5>
+                      <p style={{ fontSize: '0.85rem', color: '#555' }}>{insight.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* AI Portfolio Tips */}
+            {aiAnalysis.portfolioTips && (
+              <div style={{ marginTop: '1rem', padding: '1rem', background: '#f5f7fa', borderRadius: '8px' }}>
+                <h4 style={{ color: '#1a237e', marginBottom: '0.5rem' }}>Portfolio Tips</h4>
+                <p style={{ color: '#555', fontSize: '0.9rem', lineHeight: '1.6' }}>{aiAnalysis.portfolioTips}</p>
+              </div>
+            )}
+
+            {/* AI Action Plan */}
+            {aiAnalysis.actionPlan?.length > 0 && (
+              <div style={{ marginTop: '1rem' }}>
+                <h4 style={{ color: '#1a237e', marginBottom: '0.5rem' }}>Personalized Action Plan</h4>
+                {aiAnalysis.actionPlan.map((item, i) => (
+                  <div key={i} className={`recommendation-item ${item.priority}`}>
+                    <h5>{item.action}</h5>
+                    <p>{item.reason}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <p className="powered-by">Powered by OpenRouter AI</p>
           </div>
         )}
 
@@ -325,6 +471,17 @@ function RiskAssessment() {
             View Portfolio Dashboard
           </button>
         </div>
+
+        {/* Confirm Dialog */}
+        <ConfirmDialog
+          open={confirmDialog.open}
+          title={confirmDialog.title}
+          message={confirmDialog.message}
+          confirmText="Retake"
+          variant="warning"
+          onConfirm={confirmDialog.onConfirm}
+          onCancel={() => setConfirmDialog({ open: false, title: '', message: '', onConfirm: null })}
+        />
       </div>
     );
   }
@@ -406,6 +563,17 @@ function RiskAssessment() {
           </button>
         )}
       </div>
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText="Retake"
+        variant="warning"
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog({ open: false, title: '', message: '', onConfirm: null })}
+      />
     </div>
   );
 }

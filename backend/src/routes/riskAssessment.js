@@ -2,6 +2,34 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const { calculateRiskScore, getRiskTolerance, generatePortfolioRecommendation } = require('../utils/investmentEngine');
+const { handleExport } = require('../utils/queryHelpers');
+
+// OpenRouter AI helper
+async function callOpenRouter(prompt, systemPrompt = '') {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5',
+      messages: [
+        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: 2500,
+      temperature: 0.2
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenRouter API error: ${await response.text()}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
 
 // Get risk questionnaire
 router.get('/questionnaire', authenticateToken, async (req, res) => {
@@ -119,7 +147,7 @@ router.post('/calculate', authenticateToken, async (req, res) => {
   }
 });
 
-// Get full risk assessment with recommendations
+// Get full risk assessment with recommendations (AI-enhanced)
 router.get('/assessment', authenticateToken, async (req, res) => {
   try {
     const prisma = req.app.get('prisma');
@@ -140,6 +168,7 @@ router.get('/assessment', authenticateToken, async (req, res) => {
       timeHorizon: questionnaire.timeHorizon || 10
     };
 
+    // Base algorithmic portfolio recommendation
     const portfolioRecommendation = generatePortfolioRecommendation(
       riskProfile,
       questionnaire.liquidAssets || 10000
@@ -156,6 +185,89 @@ router.get('/assessment', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Get assessment error:', error);
     res.status(500).json({ error: 'Failed to get assessment' });
+  }
+});
+
+// AI-powered risk analysis (on-demand, triggered by button click)
+router.post('/ai-analyze', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+
+    if (!process.env.OPENROUTER_API_KEY) {
+      return res.status(400).json({ error: 'AI analysis requires OPENROUTER_API_KEY' });
+    }
+
+    const questionnaire = await prisma.riskQuestionnaire.findUnique({
+      where: { userId: req.user.id }
+    });
+
+    if (!questionnaire || !questionnaire.riskScore) {
+      return res.status(400).json({ error: 'Please complete the risk assessment questionnaire first' });
+    }
+
+    const prompt = `Analyze this investor's risk assessment questionnaire and provide personalized advice.
+
+Investor Profile:
+- Age: ${questionnaire.age}, Dependents: ${questionnaire.dependents || 0}
+- Annual Income: $${questionnaire.annualIncome?.toLocaleString() || 'N/A'}
+- Net Worth: $${questionnaire.netWorth?.toLocaleString() || 'N/A'}
+- Liquid Assets: $${questionnaire.liquidAssets?.toLocaleString() || 'N/A'}
+- Monthly Expenses: $${questionnaire.monthlyExpenses?.toLocaleString() || 'N/A'}
+- Debt Level: ${questionnaire.debtLevel || 'N/A'}
+- Emergency Fund: ${questionnaire.hasEmergencyFund ? `Yes (${questionnaire.emergencyFundMonths} months)` : 'No'}
+- Risk Attitude: ${questionnaire.riskAttitude}/10
+- Loss Tolerance: ${questionnaire.lossTolerance}
+- Investment Experience: ${questionnaire.investmentExperience || 'N/A'}
+- Primary Goal: ${questionnaire.primaryGoal || 'N/A'}
+- Time Horizon: ${questionnaire.timeHorizon} years
+- Income Stability: ${questionnaire.incomeStability || 'N/A'}
+- Market Drop Reaction: ${questionnaire.marketDropReaction || 'N/A'}
+- Preferred Approach: ${questionnaire.preferredApproach || 'N/A'}
+
+Algorithm Risk Score: ${questionnaire.riskScore}/100 (${questionnaire.riskTolerance})
+
+Respond in JSON:
+{
+  "interpretation": {
+    "title": "personalized investor profile title",
+    "description": "2-3 sentence personalized description of their risk profile based on ALL their answers",
+    "suitable": "specific investment types suitable for this exact person",
+    "caution": "personalized warning based on their specific situation"
+  },
+  "insights": [
+    { "type": "success|warning|caution|info", "title": "short title", "message": "personalized insight" }
+  ],
+  "actionPlan": [
+    { "priority": "high|medium|low", "action": "specific action step", "reason": "why this matters for them" }
+  ],
+  "portfolioTips": "2-3 sentences of personalized portfolio allocation advice"
+}
+
+Provide 4-6 insights covering emergency fund, debt, diversification, tax optimization, and goal-specific advice. Make action plan 3-5 items.`;
+
+    const aiResponse = await callOpenRouter(prompt, 'You are an expert financial advisor specializing in risk assessment and portfolio management. Provide personalized, actionable advice. Always respond in valid JSON.');
+    const parsed = JSON.parse(aiResponse.replace(/```json\n?|```\n?/g, '').trim());
+
+    res.json({
+      interpretation: parsed.interpretation,
+      insights: parsed.insights,
+      actionPlan: parsed.actionPlan,
+      portfolioTips: parsed.portfolioTips
+    });
+  } catch (error) {
+    console.error('AI risk analysis error:', error);
+    res.status(500).json({ error: 'Failed to generate AI analysis' });
+  }
+});
+
+// Export risk assessment data
+router.get('/export', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    const exportFields = ['age', 'dependents', 'annualIncome', 'netWorth', 'liquidAssets', 'monthlyExpenses', 'debtLevel', 'riskAttitude', 'lossTolerance', 'investmentExperience', 'primaryGoal', 'timeHorizon', 'riskScore', 'riskTolerance'];
+    await handleExport(res, prisma, 'riskQuestionnaire', req.user.id, req.query, 'Risk Assessment', exportFields);
+  } catch (error) {
+    res.status(500).json({ error: 'Export failed' });
   }
 });
 

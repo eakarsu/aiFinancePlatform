@@ -12,6 +12,14 @@ const fraudDetectionRoutes = require('./routes/fraudDetection');
 const alertsRoutes = require('./routes/alerts');
 const transactionImportRoutes = require('./routes/transactionImport');
 const riskAssessmentRoutes = require('./routes/riskAssessment');
+const stockScreenerRoutes = require('./routes/stockScreener');
+const cryptoAnalyzerRoutes = require('./routes/cryptoAnalyzer');
+const loanAdvisorRoutes = require('./routes/loanAdvisor');
+const insuranceOptimizerRoutes = require('./routes/insuranceOptimizer');
+const retirementPlannerRoutes = require('./routes/retirementPlanner');
+const budgetCoachRoutes = require('./routes/budgetCoach');
+const goalTrackerRoutes = require('./routes/goalTracker');
+const billNegotiatorRoutes = require('./routes/billNegotiator');
 
 const app = express();
 
@@ -35,6 +43,14 @@ app.use('/api/fraud-detection', fraudDetectionRoutes);
 app.use('/api/alerts', alertsRoutes);
 app.use('/api/transaction-import', transactionImportRoutes);
 app.use('/api/risk-assessment', riskAssessmentRoutes);
+app.use('/api/stock-screener', stockScreenerRoutes);
+app.use('/api/crypto-analyzer', cryptoAnalyzerRoutes);
+app.use('/api/loan-advisor', loanAdvisorRoutes);
+app.use('/api/insurance-optimizer', insuranceOptimizerRoutes);
+app.use('/api/retirement-planner', retirementPlannerRoutes);
+app.use('/api/budget-coach', budgetCoachRoutes);
+app.use('/api/goal-tracker', goalTrackerRoutes);
+app.use('/api/bill-negotiator', billNegotiatorRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -46,9 +62,17 @@ app.get('/api/health', (req, res) => {
       'fraud-detection',
       'alerts',
       'transaction-import',
-      'risk-assessment'
+      'risk-assessment',
+      'stock-screener',
+      'crypto-analyzer',
+      'loan-advisor',
+      'insurance-optimizer',
+      'retirement-planner',
+      'budget-coach',
+      'goal-tracker',
+      'bill-negotiator'
     ],
-    version: '2.0.0'
+    version: '3.0.0'
   });
 });
 

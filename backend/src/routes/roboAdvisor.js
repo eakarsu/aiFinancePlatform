@@ -2,6 +2,34 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const investmentEngine = require('../utils/investmentEngine');
+const { paginatedQuery, bulkDelete, bulkUpdate, handleExport } = require('../utils/queryHelpers');
+
+// Repair truncated JSON by closing open brackets/braces
+function repairJSON(str) {
+  try {
+    JSON.parse(str);
+    return str;
+  } catch (e) {
+    let fixed = str.replace(/,\s*$/, '');
+    const opens = { '{': 0, '[': 0 };
+    const closes = { '}': '{', ']': '[' };
+    let inString = false;
+    let escape = false;
+    for (const ch of fixed) {
+      if (escape) { escape = false; continue; }
+      if (ch === '\\') { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{' || ch === '[') opens[ch]++;
+      if (ch === '}' || ch === ']') opens[closes[ch]]--;
+    }
+    if (inString) fixed += '"';
+    for (let i = 0; i < opens['[']; i++) fixed += ']';
+    for (let i = 0; i < opens['{']; i++) fixed += '}';
+    fixed = fixed.replace(/,\s*([}\]])/g, '$1');
+    return fixed;
+  }
+}
 
 // OpenRouter AI helper
 async function callOpenRouter(prompt, systemPrompt = '') {
@@ -19,12 +47,12 @@ async function callOpenRouter(prompt, systemPrompt = '') {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-3-haiku',
+      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5',
       messages: [
         ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
         { role: 'user', content: prompt }
       ],
-      max_tokens: 2000,
+      max_tokens: 8000,
       temperature: 0.3
     })
   });
@@ -102,7 +130,10 @@ router.post('/recommend-portfolio', authenticateToken, async (req, res) => {
     }
 
     // Build AI prompt for portfolio recommendation
-    const prompt = `You are an expert financial advisor. Create a detailed portfolio recommendation.
+    const monthlySurplus = (riskProfile.monthlyIncome && riskProfile.monthlyExpenses)
+      ? riskProfile.monthlyIncome - riskProfile.monthlyExpenses : null;
+
+    const prompt = `You are a certified financial planner. Create a comprehensive portfolio recommendation.
 
 INVESTOR PROFILE:
 - Risk Tolerance: ${riskProfile.riskTolerance}
@@ -110,31 +141,47 @@ INVESTOR PROFILE:
 - Time Horizon: ${riskProfile.timeHorizon} years
 - Monthly Income: $${riskProfile.monthlyIncome || 'Not specified'}
 - Monthly Expenses: $${riskProfile.monthlyExpenses || 'Not specified'}
+- Monthly Surplus: $${monthlySurplus || 'Not specified'}
 - Emergency Fund: $${riskProfile.emergencyFund || 'Not specified'}
 - Investment Amount: $${amount}
 
-Provide a complete portfolio recommendation in this exact JSON format:
+Respond ONLY with valid JSON:
 {
-  "portfolioType": "CONSERVATIVE|BALANCED|GROWTH",
-  "description": "Brief description of the portfolio strategy",
+  "portfolioType": "CONSERVATIVE or BALANCED or GROWTH or AGGRESSIVE",
+  "description": "2-3 sentence strategy description",
   "allocation": [
-    {"asset": "US Stocks", "percentage": 40, "amount": 4000, "etf": "VTI", "etfName": "Vanguard Total Stock Market ETF", "expenseRatio": 0.03},
-    {"asset": "International Stocks", "percentage": 20, "amount": 2000, "etf": "VXUS", "etfName": "Vanguard Total International Stock ETF", "expenseRatio": 0.07},
-    {"asset": "Bonds", "percentage": 30, "amount": 3000, "etf": "BND", "etfName": "Vanguard Total Bond Market ETF", "expenseRatio": 0.03},
-    {"asset": "Cash/Money Market", "percentage": 10, "amount": 1000, "etf": "VMFXX", "etfName": "Vanguard Federal Money Market Fund", "expenseRatio": 0.11}
+    {"asset": "US Stocks", "percentage": 40, "amount": ${amount * 0.4}, "etf": "VTI", "etfName": "Vanguard Total Stock Market ETF", "expenseRatio": 0.03},
+    {"asset": "International Stocks", "percentage": 20, "amount": ${amount * 0.2}, "etf": "VXUS", "etfName": "Vanguard Total International Stock ETF", "expenseRatio": 0.07},
+    {"asset": "Bonds", "percentage": 30, "amount": ${amount * 0.3}, "etf": "BND", "etfName": "Vanguard Total Bond Market ETF", "expenseRatio": 0.03},
+    {"asset": "Cash/Money Market", "percentage": 10, "amount": ${amount * 0.1}, "etf": "VMFXX", "etfName": "Vanguard Federal Money Market Fund", "expenseRatio": 0.11}
   ],
   "expectedReturn": {"low": 5, "high": 8},
-  "volatility": "Low|Medium|High",
-  "rebalanceFrequency": "Quarterly|Semi-Annually|Annually",
+  "volatility": "Low or Medium or High",
+  "rebalanceFrequency": "Quarterly or Semi-Annually or Annually",
   "weightedExpenseRatio": "0.05",
-  "reasoning": "Detailed explanation of why this allocation suits the investor"
+  "reasoning": "Detailed 3-4 sentence explanation of why this allocation suits the investor",
+  "marketOutlook": "2-3 sentences on current market conditions and how they affect this recommendation",
+  "riskAnalysis": {
+    "maxDrawdown": "-15% to -20%",
+    "volatilityScore": 4,
+    "riskFactors": ["factor 1", "factor 2", "factor 3"],
+    "mitigations": ["how risk is mitigated 1", "how risk is mitigated 2"]
+  },
+  "growthProjections": {
+    "year1": {"conservative": ${Math.round(amount * 1.03)}, "expected": ${Math.round(amount * 1.06)}, "optimistic": ${Math.round(amount * 1.10)}},
+    "year3": {"conservative": ${Math.round(amount * 1.09)}, "expected": ${Math.round(amount * 1.19)}, "optimistic": ${Math.round(amount * 1.33)}},
+    "year5": {"conservative": ${Math.round(amount * 1.16)}, "expected": ${Math.round(amount * 1.34)}, "optimistic": ${Math.round(amount * 1.61)}},
+    "year10": {"conservative": ${Math.round(amount * 1.34)}, "expected": ${Math.round(amount * 1.79)}, "optimistic": ${Math.round(amount * 2.59)}}
+  },
+  "monthlyContribution": {
+    "recommended": ${monthlySurplus ? Math.round(monthlySurplus * 0.3) : 500},
+    "impact": "How monthly contributions accelerate growth over time horizon"
+  },
+  "taxStrategy": "2-3 sentences on tax-efficient investing approach (tax-loss harvesting, account types, etc.)",
+  "nextSteps": ["actionable step 1", "actionable step 2", "actionable step 3", "actionable step 4"]
 }
 
-IMPORTANT:
-- Percentages must add up to 100
-- Amount for each asset = percentage * ${amount} / 100
-- Use real ETF symbols and names
-- Respond ONLY with valid JSON, no other text`;
+RULES: Percentages must add up to 100. Use real ETF symbols. Amounts = percentage * ${amount} / 100.`;
 
     let recommendation;
     let modelUsed = 'openrouter';
@@ -150,7 +197,7 @@ IMPORTANT:
       const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
 
       if (jsonMatch) {
-        recommendation = JSON.parse(jsonMatch[0]);
+        recommendation = JSON.parse(repairJSON(jsonMatch[0]));
         recommendation.suitability = {
           riskTolerance: riskProfile.riskTolerance,
           investmentGoal: riskProfile.investmentGoal,
@@ -232,20 +279,52 @@ router.post('/portfolios', authenticateToken, async (req, res) => {
   }
 });
 
-// Get Portfolios
+// Get Portfolios (paginated, searchable)
 router.get('/portfolios', authenticateToken, async (req, res) => {
   try {
     const prisma = req.app.get('prisma');
-    const portfolios = await prisma.portfolio.findMany({
-      where: { userId: req.user.id },
-      include: {
-        holdings: true,
-        investments: { take: 10, orderBy: { createdAt: 'desc' } }
-      }
+    const { search } = req.query;
+    const result = await paginatedQuery(prisma, 'portfolio', {
+      baseWhere: { userId: req.user.id },
+      search,
+      searchFields: ['name', 'type'],
+      query: req.query
     });
-    res.json(portfolios);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: 'Failed to get portfolios' });
+  }
+});
+
+// Bulk delete portfolios
+router.post('/portfolios/bulk-delete', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    const result = await bulkDelete(prisma, 'portfolio', req.user.id, req.body.ids);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Bulk delete failed' });
+  }
+});
+
+// Bulk update portfolios
+router.patch('/portfolios/bulk-update', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    const result = await bulkUpdate(prisma, 'portfolio', req.user.id, req.body.ids, req.body.data);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Bulk update failed' });
+  }
+});
+
+// Export portfolios
+router.get('/portfolios/export', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    await handleExport(res, prisma, 'portfolio', req.user.id, req.query, 'Portfolios', ['name', 'type', 'totalValue', 'cashBalance', 'aiScore', 'aiRecommendation']);
+  } catch (error) {
+    res.status(500).json({ error: 'Export failed' });
   }
 });
 

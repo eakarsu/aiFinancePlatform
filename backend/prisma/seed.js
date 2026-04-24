@@ -52,6 +52,16 @@ async function main() {
   await prisma.plaidConnection.deleteMany();
   await prisma.riskProfile.deleteMany();
   await prisma.aIAnalysisLog.deleteMany();
+  // Clear new feature tables
+  await prisma.stockScreener.deleteMany();
+  await prisma.cryptoAnalysis.deleteMany();
+  await prisma.loanApplication.deleteMany();
+  await prisma.insurancePolicy.deleteMany();
+  await prisma.retirementPlan.deleteMany();
+  await prisma.budgetPlan.deleteMany();
+  await prisma.expense.deleteMany();
+  await prisma.financialGoal.deleteMany();
+  await prisma.bill.deleteMany();
   await prisma.user.deleteMany();
 
   // ============== SEED USERS (15+) ==============
@@ -120,8 +130,37 @@ async function main() {
   // ============== SEED RISK QUESTIONNAIRES (15+) ==============
   console.log('\n📝 Seeding risk questionnaires...');
 
-  const riskQuestionnaires = await Promise.all(
-    users.map((user, index) =>
+  // Create fully-populated risk questionnaire for demo user first
+  const demoRiskQ = await prisma.riskQuestionnaire.create({
+    data: {
+      userId: users[0].id,
+      age: 35,
+      dependents: 2,
+      annualIncome: 125000,
+      netWorth: 450000,
+      liquidAssets: 85000,
+      monthlyExpenses: 5200,
+      debtLevel: 'low',
+      hasEmergencyFund: true,
+      emergencyFundMonths: 8,
+      riskAttitude: 7,
+      lossTolerance: 'moderate',
+      investmentExperience: 'intermediate',
+      primaryGoal: 'growth',
+      timeHorizon: 20,
+      incomeStability: 'stable',
+      marketDropReaction: 'buy_more',
+      preferredApproach: 'moderate_growth',
+      riskScore: 68,
+      riskTolerance: 'MODERATE',
+    },
+  });
+
+  const riskQuestionnaires = [demoRiskQ];
+
+  // Create questionnaires for other users
+  const otherQuestionnaires = await Promise.all(
+    users.slice(1).map((user, index) =>
       prisma.riskQuestionnaire.create({
         data: {
           userId: user.id,
@@ -137,17 +176,18 @@ async function main() {
           riskAttitude: randomNumber(1, 10),
           lossTolerance: randomItem(['none', 'small', 'moderate', 'large']),
           investmentExperience: randomItem(['none', 'beginner', 'intermediate', 'advanced']),
-          primaryGoal: goals[index % 4],
+          primaryGoal: goals[(index + 1) % 4],
           timeHorizon: randomNumber(5, 30),
           incomeStability: randomItem(['very_stable', 'stable', 'variable', 'unstable']),
           marketDropReaction: randomItem(['sell_all', 'sell_some', 'hold', 'buy_more']),
           preferredApproach: randomItem(['guaranteed_low', 'moderate_growth', 'high_growth']),
           riskScore: randomNumber(20, 90),
-          riskTolerance: riskLevels[index % 3],
+          riskTolerance: riskLevels[(index + 1) % 3],
         },
       })
     )
   );
+  riskQuestionnaires.push(...otherQuestionnaires);
   console.log(`   ✓ Created ${riskQuestionnaires.length} risk questionnaires`);
 
   // ============== SEED PORTFOLIOS (20+) ==============
@@ -161,8 +201,49 @@ async function main() {
   ];
 
   const portfolios = [];
-  for (let i = 0; i < users.length; i++) {
-    const numPortfolios = randomNumber(1, 3);
+
+  // Create 25 portfolios for demo user
+  const demoUserRef = users[0]; // demo@aifinance.com
+  const demoPortfolioNames = [
+    'Retirement Fund', 'Growth Portfolio', 'Emergency Savings', 'College Fund',
+    'Long-term Wealth', 'Dividend Income', 'Tech Growth', 'Global Diversified',
+    'Blue Chip Core', 'Small Cap Growth', 'Bond Ladder', 'Real Estate Focus',
+    'ESG Impact Fund', 'Healthcare Sector', 'Energy Transition', 'Value Fund',
+    'Momentum Strategy', 'International Growth', 'Emerging Markets', 'High Yield Bond',
+    'S&P 500 Index', 'Total Market Fund', 'Balanced Retirement', 'Aggressive Growth',
+    'Conservative Income'
+  ];
+  const demoRecommendations = [
+    'Portfolio is well-balanced. Consider maintaining current allocation.',
+    'Consider increasing bond allocation for better risk management.',
+    'Rebalancing recommended — equity allocation has drifted 5% above target.',
+    'Growth stocks overweight by 8%. Consider trimming tech exposure.',
+    'Portfolio aligned with retirement timeline. On track for goals.',
+    'Dividend yield is strong at 3.2%. Consider reinvesting dividends.',
+    'International exposure is low. Consider adding emerging market ETFs.',
+    'ESG score is excellent. Portfolio aligns with sustainability goals.',
+    'Cash allocation is high — consider deploying into fixed income.',
+    'Tax-loss harvesting opportunity identified in 3 positions.'
+  ];
+  for (let j = 0; j < 25; j++) {
+    const portfolio = await prisma.portfolio.create({
+      data: {
+        userId: demoUserRef.id,
+        name: demoPortfolioNames[j],
+        type: portfolioTypes[j % 5],
+        totalValue: randomFloat(5000, 500000),
+        cashBalance: randomFloat(500, 10000),
+        aiScore: randomFloat(70, 98),
+        aiRecommendation: demoRecommendations[j % demoRecommendations.length],
+        lastRebalanced: randomDate(new Date('2024-01-01'), new Date()),
+      },
+    });
+    portfolios.push(portfolio);
+  }
+
+  // Create 1-2 portfolios for other users
+  for (let i = 1; i < users.length; i++) {
+    const numPortfolios = randomNumber(1, 2);
     for (let j = 0; j < numPortfolios; j++) {
       const portfolio = await prisma.portfolio.create({
         data: {
@@ -306,7 +387,41 @@ async function main() {
   ];
 
   const creditHistories = [];
-  for (const profile of creditProfiles) {
+
+  // Create 25+ credit histories for demo user's profile
+  const demoCreditProfile = creditProfiles[0]; // demo user's profile
+  const demoCreditProviders = [
+    'City Apartments LLC', 'Pacific Gas & Electric', 'Verizon Wireless', 'Chase Bank Visa',
+    'AT&T Wireless', 'Comcast Xfinity', 'Wells Fargo Auto Loan', 'Bank of America Mastercard',
+    'Capital One Rewards', 'State Farm Insurance', 'Netflix Premium', 'Spotify Family',
+    'Adobe Creative Cloud', 'Microsoft 365', 'T-Mobile Family Plan', 'Geico Auto Insurance',
+    'Home Depot Credit Card', 'Amazon Prime Card', 'Citi Double Cash', 'Discover It Card',
+    'PG&E Solar Plan', 'Water Utility District', 'Google Fi Phone', 'Progressive Insurance',
+    'Best Buy Store Card', 'Costco Membership', 'SoCalEdison'
+  ];
+  const demoCreditTypes = ['rent', 'utility', 'phone', 'loan', 'credit_card', 'insurance', 'subscription'];
+  for (let i = 0; i < 27; i++) {
+    const onTime = randomNumber(18, 72);
+    const late = randomNumber(0, 3);
+    const missed = randomNumber(0, 1);
+    const history = await prisma.creditHistory.create({
+      data: {
+        creditProfileId: demoCreditProfile.id,
+        type: demoCreditTypes[i % demoCreditTypes.length],
+        provider: demoCreditProviders[i % demoCreditProviders.length],
+        monthlyAmount: randomFloat(15, 2500),
+        onTimePayments: onTime,
+        latePayments: late,
+        missedPayments: missed,
+        startDate: randomDate(new Date('2018-01-01'), new Date('2023-01-01')),
+        endDate: Math.random() > 0.4 ? null : randomDate(new Date('2024-01-01'), new Date()),
+      },
+    });
+    creditHistories.push(history);
+  }
+
+  // Create credit histories for other users
+  for (let p = 1; p < creditProfiles.length; p++) {
     const numHistories = randomNumber(3, 6);
     for (let i = 0; i < numHistories; i++) {
       const onTime = randomNumber(12, 60);
@@ -315,7 +430,7 @@ async function main() {
 
       const history = await prisma.creditHistory.create({
         data: {
-          creditProfileId: profile.id,
+          creditProfileId: creditProfiles[p].id,
           type: randomItem(creditTypes),
           provider: randomItem(providers),
           monthlyAmount: randomFloat(50, 2500),
@@ -718,6 +833,348 @@ async function main() {
   }
   console.log(`   ✓ Created ${aiLogs.length} AI analysis logs`);
 
+  // ============== SEED STOCK SCREENER (15+) ==============
+  console.log('\n📊 Seeding stock screener...');
+  const stocksData = [
+    { symbol: 'AAPL', companyName: 'Apple Inc.', sector: 'Technology', industry: 'Consumer Electronics', marketCap: 2800000000000, currentPrice: 178.50, targetPrice: 200.00, peRatio: 28.5, eps: 6.26, dividendYield: 0.55 },
+    { symbol: 'MSFT', companyName: 'Microsoft Corporation', sector: 'Technology', industry: 'Software', marketCap: 2600000000000, currentPrice: 378.90, targetPrice: 420.00, peRatio: 35.2, eps: 10.76, dividendYield: 0.74 },
+    { symbol: 'GOOGL', companyName: 'Alphabet Inc.', sector: 'Technology', industry: 'Internet Services', marketCap: 1700000000000, currentPrice: 141.25, targetPrice: 165.00, peRatio: 24.8, eps: 5.69 },
+    { symbol: 'AMZN', companyName: 'Amazon.com Inc.', sector: 'Consumer Discretionary', industry: 'E-Commerce', marketCap: 1500000000000, currentPrice: 178.35, targetPrice: 200.00, peRatio: 62.5, eps: 2.85 },
+    { symbol: 'NVDA', companyName: 'NVIDIA Corporation', sector: 'Technology', industry: 'Semiconductors', marketCap: 1200000000000, currentPrice: 495.22, targetPrice: 600.00, peRatio: 65.3, eps: 7.58 },
+    { symbol: 'TSLA', companyName: 'Tesla Inc.', sector: 'Consumer Discretionary', industry: 'Auto Manufacturers', marketCap: 780000000000, currentPrice: 245.50, targetPrice: 280.00, peRatio: 75.2, eps: 3.26 },
+    { symbol: 'META', companyName: 'Meta Platforms Inc.', sector: 'Technology', industry: 'Internet Services', marketCap: 850000000000, currentPrice: 330.75, targetPrice: 380.00, peRatio: 25.4, eps: 13.02 },
+    { symbol: 'JPM', companyName: 'JPMorgan Chase & Co.', sector: 'Financial Services', industry: 'Banks', marketCap: 480000000000, currentPrice: 165.20, targetPrice: 185.00, peRatio: 10.8, eps: 15.30, dividendYield: 2.52 },
+    { symbol: 'V', companyName: 'Visa Inc.', sector: 'Financial Services', industry: 'Credit Services', marketCap: 520000000000, currentPrice: 258.45, targetPrice: 290.00, peRatio: 29.5, eps: 8.76, dividendYield: 0.75 },
+    { symbol: 'JNJ', companyName: 'Johnson & Johnson', sector: 'Healthcare', industry: 'Drug Manufacturers', marketCap: 380000000000, currentPrice: 157.80, targetPrice: 175.00, peRatio: 15.2, eps: 10.38, dividendYield: 2.95 },
+    { symbol: 'WMT', companyName: 'Walmart Inc.', sector: 'Consumer Defensive', industry: 'Discount Stores', marketCap: 420000000000, currentPrice: 156.25, targetPrice: 170.00, peRatio: 27.8, eps: 5.62, dividendYield: 1.35 },
+    { symbol: 'PG', companyName: 'Procter & Gamble Co.', sector: 'Consumer Defensive', industry: 'Household Products', marketCap: 350000000000, currentPrice: 148.90, targetPrice: 165.00, peRatio: 24.5, eps: 6.08, dividendYield: 2.42 },
+    { symbol: 'XOM', companyName: 'Exxon Mobil Corporation', sector: 'Energy', industry: 'Oil & Gas', marketCap: 430000000000, currentPrice: 105.75, targetPrice: 120.00, peRatio: 12.5, eps: 8.46, dividendYield: 3.45 },
+    { symbol: 'HD', companyName: 'The Home Depot Inc.', sector: 'Consumer Discretionary', industry: 'Home Improvement', marketCap: 320000000000, currentPrice: 322.50, targetPrice: 360.00, peRatio: 21.5, eps: 15.00, dividendYield: 2.65 },
+    { symbol: 'DIS', companyName: 'The Walt Disney Company', sector: 'Communication Services', industry: 'Entertainment', marketCap: 180000000000, currentPrice: 98.45, targetPrice: 120.00, peRatio: 68.5, eps: 1.44 },
+    { symbol: 'NFLX', companyName: 'Netflix Inc.', sector: 'Communication Services', industry: 'Streaming', marketCap: 195000000000, currentPrice: 450.25, targetPrice: 520.00, peRatio: 42.5, eps: 10.59 }
+  ];
+  for (const stock of stocksData) {
+    await prisma.stockScreener.create({ data: { userId: demoUser.id, ...stock } });
+  }
+  console.log(`   ✓ Created ${stocksData.length} stock screener entries`);
+
+  // ============== SEED CRYPTO ANALYZER (15+) ==============
+  console.log('\n₿ Seeding crypto analyzer...');
+  const cryptosData = [
+    { symbol: 'BTC', name: 'Bitcoin', currentPrice: 43250.00, priceChange24h: 2.5, priceChange7d: 8.3, marketCap: 850000000000, volume24h: 25000000000, allTimeHigh: 69000, allTimeLow: 67.81 },
+    { symbol: 'ETH', name: 'Ethereum', currentPrice: 2285.50, priceChange24h: 3.2, priceChange7d: 12.5, marketCap: 275000000000, volume24h: 15000000000, allTimeHigh: 4878, allTimeLow: 0.42 },
+    { symbol: 'BNB', name: 'Binance Coin', currentPrice: 312.45, priceChange24h: 1.8, priceChange7d: 5.2, marketCap: 48000000000, volume24h: 1200000000, allTimeHigh: 686, allTimeLow: 0.10 },
+    { symbol: 'SOL', name: 'Solana', currentPrice: 98.75, priceChange24h: 5.5, priceChange7d: 18.2, marketCap: 42000000000, volume24h: 2500000000, allTimeHigh: 260, allTimeLow: 0.50 },
+    { symbol: 'XRP', name: 'XRP', currentPrice: 0.52, priceChange24h: 1.2, priceChange7d: 3.5, marketCap: 28000000000, volume24h: 1500000000, allTimeHigh: 3.40, allTimeLow: 0.003 },
+    { symbol: 'ADA', name: 'Cardano', currentPrice: 0.58, priceChange24h: 2.1, priceChange7d: 6.8, marketCap: 20500000000, volume24h: 450000000, allTimeHigh: 3.10, allTimeLow: 0.017 },
+    { symbol: 'DOGE', name: 'Dogecoin', currentPrice: 0.082, priceChange24h: 4.5, priceChange7d: 15.2, marketCap: 11500000000, volume24h: 800000000, allTimeHigh: 0.74, allTimeLow: 0.00008 },
+    { symbol: 'AVAX', name: 'Avalanche', currentPrice: 35.25, priceChange24h: 3.8, priceChange7d: 10.5, marketCap: 13000000000, volume24h: 550000000, allTimeHigh: 146, allTimeLow: 2.80 },
+    { symbol: 'DOT', name: 'Polkadot', currentPrice: 7.45, priceChange24h: 2.8, priceChange7d: 8.9, marketCap: 9500000000, volume24h: 350000000, allTimeHigh: 55, allTimeLow: 2.69 },
+    { symbol: 'MATIC', name: 'Polygon', currentPrice: 0.85, priceChange24h: 3.5, priceChange7d: 11.2, marketCap: 8500000000, volume24h: 450000000, allTimeHigh: 2.92, allTimeLow: 0.003 },
+    { symbol: 'LINK', name: 'Chainlink', currentPrice: 14.85, priceChange24h: 2.2, priceChange7d: 7.5, marketCap: 8700000000, volume24h: 320000000, allTimeHigh: 52.88, allTimeLow: 0.13 },
+    { symbol: 'UNI', name: 'Uniswap', currentPrice: 6.25, priceChange24h: 1.9, priceChange7d: 5.8, marketCap: 4700000000, volume24h: 180000000, allTimeHigh: 44.97, allTimeLow: 0.42 },
+    { symbol: 'ATOM', name: 'Cosmos', currentPrice: 9.85, priceChange24h: 2.5, priceChange7d: 6.2, marketCap: 3800000000, volume24h: 150000000, allTimeHigh: 44.70, allTimeLow: 1.13 },
+    { symbol: 'LTC', name: 'Litecoin', currentPrice: 72.50, priceChange24h: 1.5, priceChange7d: 4.2, marketCap: 5400000000, volume24h: 350000000, allTimeHigh: 412, allTimeLow: 1.11 },
+    { symbol: 'XLM', name: 'Stellar', currentPrice: 0.12, priceChange24h: 1.8, priceChange7d: 5.5, marketCap: 3400000000, volume24h: 120000000, allTimeHigh: 0.94, allTimeLow: 0.001 }
+  ];
+  for (const crypto of cryptosData) {
+    await prisma.cryptoAnalysis.create({ data: { userId: demoUser.id, ...crypto } });
+  }
+  console.log(`   ✓ Created ${cryptosData.length} crypto analyzer entries`);
+
+  // ============== SEED LOAN ADVISOR (15+) ==============
+  console.log('\n🏦 Seeding loan advisor...');
+  const loansData = [
+    { loanType: 'mortgage', loanAmount: 350000, loanPurpose: 'Home purchase', loanTerm: 360, annualIncome: 120000, employmentStatus: 'employed', employmentYears: 8, creditScore: 740, existingDebts: 15000, downPayment: 70000 },
+    { loanType: 'auto', loanAmount: 35000, loanPurpose: 'New car purchase', loanTerm: 60, annualIncome: 75000, employmentStatus: 'employed', employmentYears: 5, creditScore: 720, existingDebts: 8000 },
+    { loanType: 'personal', loanAmount: 15000, loanPurpose: 'Debt consolidation', loanTerm: 36, annualIncome: 55000, employmentStatus: 'employed', employmentYears: 3, creditScore: 680, existingDebts: 12000 },
+    { loanType: 'student', loanAmount: 45000, loanPurpose: 'Graduate school', loanTerm: 120, annualIncome: 45000, employmentStatus: 'employed', employmentYears: 2, creditScore: 700, existingDebts: 5000 },
+    { loanType: 'business', loanAmount: 100000, loanPurpose: 'Business expansion', loanTerm: 84, annualIncome: 150000, employmentStatus: 'self-employed', employmentYears: 6, creditScore: 750, collateralValue: 80000 },
+    { loanType: 'mortgage', loanAmount: 250000, loanPurpose: 'Investment property', loanTerm: 360, annualIncome: 95000, employmentStatus: 'employed', employmentYears: 10, creditScore: 760, existingDebts: 180000, downPayment: 50000 },
+    { loanType: 'auto', loanAmount: 25000, loanPurpose: 'Used car purchase', loanTerm: 48, annualIncome: 60000, employmentStatus: 'employed', employmentYears: 4, creditScore: 695, existingDebts: 5000 },
+    { loanType: 'personal', loanAmount: 8000, loanPurpose: 'Home improvement', loanTerm: 24, annualIncome: 50000, employmentStatus: 'employed', employmentYears: 2, creditScore: 710, existingDebts: 3000 },
+    { loanType: 'business', loanAmount: 50000, loanPurpose: 'Equipment purchase', loanTerm: 60, annualIncome: 90000, employmentStatus: 'self-employed', employmentYears: 4, creditScore: 725, collateralValue: 40000 },
+    { loanType: 'mortgage', loanAmount: 500000, loanPurpose: 'Luxury home', loanTerm: 360, annualIncome: 200000, employmentStatus: 'employed', employmentYears: 15, creditScore: 780, existingDebts: 45000, downPayment: 100000 },
+    { loanType: 'personal', loanAmount: 20000, loanPurpose: 'Medical expenses', loanTerm: 48, annualIncome: 65000, employmentStatus: 'employed', employmentYears: 5, creditScore: 690, existingDebts: 8000 },
+    { loanType: 'auto', loanAmount: 45000, loanPurpose: 'Electric vehicle', loanTerm: 72, annualIncome: 85000, employmentStatus: 'employed', employmentYears: 7, creditScore: 735, existingDebts: 10000 },
+    { loanType: 'student', loanAmount: 30000, loanPurpose: 'Medical school', loanTerm: 120, annualIncome: 40000, employmentStatus: 'employed', employmentYears: 1, creditScore: 680, existingDebts: 15000 },
+    { loanType: 'business', loanAmount: 200000, loanPurpose: 'Franchise purchase', loanTerm: 120, annualIncome: 180000, employmentStatus: 'self-employed', employmentYears: 8, creditScore: 770, collateralValue: 150000 },
+    { loanType: 'personal', loanAmount: 5000, loanPurpose: 'Emergency fund', loanTerm: 12, annualIncome: 42000, employmentStatus: 'employed', employmentYears: 2, creditScore: 650, existingDebts: 2000 }
+  ];
+  for (const loan of loansData) {
+    await prisma.loanApplication.create({ data: { userId: demoUser.id, ...loan } });
+  }
+  console.log(`   ✓ Created ${loansData.length} loan advisor entries`);
+
+  // ============== SEED INSURANCE OPTIMIZER (15+) ==============
+  console.log('\n🔒 Seeding insurance optimizer...');
+  const insuranceData = [
+    { insuranceType: 'health', provider: 'Blue Cross Blue Shield', coverageAmount: 500000, premium: 450, deductible: 2500, isActive: true },
+    { insuranceType: 'auto', provider: 'State Farm', coverageAmount: 100000, premium: 125, deductible: 500, isActive: true },
+    { insuranceType: 'home', provider: 'Allstate', coverageAmount: 350000, premium: 175, deductible: 1000, isActive: true },
+    { insuranceType: 'life', provider: 'Northwestern Mutual', coverageAmount: 500000, premium: 85, deductible: 0, isActive: true },
+    { insuranceType: 'disability', provider: 'MetLife', coverageAmount: 60000, premium: 95, deductible: 90, isActive: true },
+    { insuranceType: 'umbrella', provider: 'GEICO', coverageAmount: 1000000, premium: 35, deductible: 0, isActive: true },
+    { insuranceType: 'health', provider: 'UnitedHealthcare', coverageAmount: 750000, premium: 550, deductible: 1500, isActive: true },
+    { insuranceType: 'auto', provider: 'Progressive', coverageAmount: 150000, premium: 145, deductible: 750, isActive: true },
+    { insuranceType: 'home', provider: 'Liberty Mutual', coverageAmount: 450000, premium: 210, deductible: 1500, isActive: true },
+    { insuranceType: 'life', provider: 'New York Life', coverageAmount: 1000000, premium: 150, deductible: 0, isActive: true },
+    { insuranceType: 'health', provider: 'Aetna', coverageAmount: 1000000, premium: 620, deductible: 3000, isActive: true },
+    { insuranceType: 'auto', provider: 'Nationwide', coverageAmount: 200000, premium: 165, deductible: 1000, isActive: true },
+    { insuranceType: 'disability', provider: 'Principal', coverageAmount: 72000, premium: 110, deductible: 60, isActive: true },
+    { insuranceType: 'life', provider: 'Prudential', coverageAmount: 250000, premium: 45, deductible: 0, isActive: true },
+    { insuranceType: 'umbrella', provider: 'Chubb', coverageAmount: 2000000, premium: 65, deductible: 0, isActive: true }
+  ];
+  for (const ins of insuranceData) {
+    await prisma.insurancePolicy.create({ data: { userId: demoUser.id, ...ins } });
+  }
+  console.log(`   ✓ Created ${insuranceData.length} insurance optimizer entries`);
+
+  // ============== SEED RETIREMENT PLANNER (15+) ==============
+  console.log('\n🏖️ Seeding retirement planner...');
+  const retirementData = [
+    { currentAge: 35, retirementAge: 65, lifeExpectancy: 90, currentSavings: 150000, monthlyContribution: 1500, expectedReturn: 7, inflationRate: 3, socialSecurityAge: 67, socialSecurityAmount: 2500, desiredRetirementIncome: 6000 },
+    { currentAge: 45, retirementAge: 67, lifeExpectancy: 92, currentSavings: 350000, monthlyContribution: 2000, expectedReturn: 6.5, inflationRate: 3, socialSecurityAge: 67, socialSecurityAmount: 3000, pensionAmount: 1500, desiredRetirementIncome: 8000 },
+    { currentAge: 28, retirementAge: 60, lifeExpectancy: 95, currentSavings: 45000, monthlyContribution: 800, expectedReturn: 8, inflationRate: 3, socialSecurityAge: 67, socialSecurityAmount: 2000, desiredRetirementIncome: 5000 },
+    { currentAge: 55, retirementAge: 65, lifeExpectancy: 88, currentSavings: 650000, monthlyContribution: 3000, expectedReturn: 5.5, inflationRate: 2.5, socialSecurityAge: 66, socialSecurityAmount: 3200, pensionAmount: 2000, desiredRetirementIncome: 10000 },
+    { currentAge: 40, retirementAge: 62, lifeExpectancy: 90, currentSavings: 200000, monthlyContribution: 1800, expectedReturn: 7, inflationRate: 3, socialSecurityAge: 67, socialSecurityAmount: 2800, desiredRetirementIncome: 7000, legacyGoal: 200000 },
+    { currentAge: 32, retirementAge: 55, lifeExpectancy: 92, currentSavings: 85000, monthlyContribution: 2500, expectedReturn: 8.5, inflationRate: 3, desiredRetirementIncome: 6500 },
+    { currentAge: 50, retirementAge: 67, lifeExpectancy: 90, currentSavings: 480000, monthlyContribution: 2200, expectedReturn: 6, inflationRate: 2.5, socialSecurityAge: 67, socialSecurityAmount: 3100, pensionAmount: 1000, desiredRetirementIncome: 9000 },
+    { currentAge: 25, retirementAge: 65, lifeExpectancy: 95, currentSavings: 15000, monthlyContribution: 500, expectedReturn: 8, inflationRate: 3, desiredRetirementIncome: 4500 },
+    { currentAge: 42, retirementAge: 60, lifeExpectancy: 88, currentSavings: 280000, monthlyContribution: 2800, expectedReturn: 7, inflationRate: 3, socialSecurityAge: 67, socialSecurityAmount: 2600, desiredRetirementIncome: 8500, healthcareCosts: 800 },
+    { currentAge: 38, retirementAge: 65, lifeExpectancy: 92, currentSavings: 180000, monthlyContribution: 1200, expectedReturn: 7.5, inflationRate: 3, socialSecurityAge: 67, socialSecurityAmount: 2400, desiredRetirementIncome: 6000 },
+    { currentAge: 52, retirementAge: 62, lifeExpectancy: 85, currentSavings: 520000, monthlyContribution: 3500, expectedReturn: 5, inflationRate: 2.5, socialSecurityAge: 65, socialSecurityAmount: 3400, pensionAmount: 2500, desiredRetirementIncome: 12000 },
+    { currentAge: 30, retirementAge: 58, lifeExpectancy: 90, currentSavings: 65000, monthlyContribution: 1500, expectedReturn: 8, inflationRate: 3, desiredRetirementIncome: 5500, legacyGoal: 100000 },
+    { currentAge: 48, retirementAge: 65, lifeExpectancy: 90, currentSavings: 380000, monthlyContribution: 2000, expectedReturn: 6.5, inflationRate: 3, socialSecurityAge: 67, socialSecurityAmount: 2900, desiredRetirementIncome: 7500 },
+    { currentAge: 33, retirementAge: 60, lifeExpectancy: 92, currentSavings: 95000, monthlyContribution: 1800, expectedReturn: 7.5, inflationRate: 3, socialSecurityAge: 67, socialSecurityAmount: 2300, desiredRetirementIncome: 6000 },
+    { currentAge: 58, retirementAge: 65, lifeExpectancy: 88, currentSavings: 750000, monthlyContribution: 4000, expectedReturn: 5, inflationRate: 2.5, socialSecurityAge: 66, socialSecurityAmount: 3500, pensionAmount: 2200, desiredRetirementIncome: 11000, healthcareCosts: 1000 }
+  ];
+  for (const plan of retirementData) {
+    await prisma.retirementPlan.create({ data: { userId: demoUser.id, ...plan } });
+  }
+  console.log(`   ✓ Created ${retirementData.length} retirement planner entries`);
+
+  // ============== SEED BUDGET COACH (3+ plans, 50+ expenses) ==============
+  console.log('\n💰 Seeding budget coach...');
+  const budgetPlansData = [
+    { name: 'Monthly Household Budget', period: 'monthly', totalIncome: 8500, totalBudget: 6800, categories: [
+      { name: 'Housing', budgeted: 2000, spent: 2000, color: '#4CAF50' }, { name: 'Food', budgeted: 800, spent: 720, color: '#2196F3' },
+      { name: 'Transportation', budgeted: 600, spent: 580, color: '#FF9800' }, { name: 'Utilities', budgeted: 350, spent: 340, color: '#9C27B0' },
+      { name: 'Entertainment', budgeted: 400, spent: 450, color: '#E91E63' }, { name: 'Healthcare', budgeted: 200, spent: 180, color: '#00BCD4' },
+      { name: 'Shopping', budgeted: 450, spent: 520, color: '#FF5722' }, { name: 'Savings', budgeted: 1500, spent: 1500, color: '#8BC34A' }, { name: 'Other', budgeted: 500, spent: 380, color: '#607D8B' }
+    ]},
+    { name: 'Single Income Budget', period: 'monthly', totalIncome: 5200, totalBudget: 4500, categories: [
+      { name: 'Housing', budgeted: 1400, spent: 1400, color: '#4CAF50' }, { name: 'Food', budgeted: 500, spent: 480, color: '#2196F3' },
+      { name: 'Transportation', budgeted: 400, spent: 420, color: '#FF9800' }, { name: 'Utilities', budgeted: 200, spent: 195, color: '#9C27B0' },
+      { name: 'Entertainment', budgeted: 200, spent: 250, color: '#E91E63' }, { name: 'Healthcare', budgeted: 150, spent: 120, color: '#00BCD4' },
+      { name: 'Savings', budgeted: 700, spent: 700, color: '#8BC34A' }, { name: 'Other', budgeted: 450, spent: 400, color: '#607D8B' }
+    ]},
+    { name: 'Family Budget', period: 'monthly', totalIncome: 12000, totalBudget: 10000, categories: [
+      { name: 'Housing', budgeted: 3000, spent: 3000, color: '#4CAF50' }, { name: 'Food', budgeted: 1200, spent: 1350, color: '#2196F3' },
+      { name: 'Transportation', budgeted: 800, spent: 750, color: '#FF9800' }, { name: 'Utilities', budgeted: 500, spent: 480, color: '#9C27B0' },
+      { name: 'Entertainment', budgeted: 600, spent: 700, color: '#E91E63' }, { name: 'Healthcare', budgeted: 400, spent: 350, color: '#00BCD4' },
+      { name: 'Childcare', budgeted: 1500, spent: 1500, color: '#795548' }, { name: 'Savings', budgeted: 2000, spent: 2000, color: '#8BC34A' }
+    ]},
+    { name: 'Student Budget', period: 'monthly', totalIncome: 2800, totalBudget: 2600, categories: [
+      { name: 'Housing', budgeted: 900, spent: 900, color: '#4CAF50' }, { name: 'Food', budgeted: 400, spent: 450, color: '#2196F3' },
+      { name: 'Transportation', budgeted: 150, spent: 120, color: '#FF9800' }, { name: 'Utilities', budgeted: 100, spent: 95, color: '#9C27B0' },
+      { name: 'Entertainment', budgeted: 150, spent: 200, color: '#E91E63' }, { name: 'Savings', budgeted: 300, spent: 200, color: '#8BC34A' },
+      { name: 'Education', budgeted: 400, spent: 380, color: '#3F51B5' }, { name: 'Other', budgeted: 200, spent: 180, color: '#607D8B' }
+    ]},
+    { name: 'Aggressive Savings Plan', period: 'monthly', totalIncome: 10000, totalBudget: 6000, categories: [
+      { name: 'Housing', budgeted: 1800, spent: 1800, color: '#4CAF50' }, { name: 'Food', budgeted: 500, spent: 480, color: '#2196F3' },
+      { name: 'Transportation', budgeted: 300, spent: 280, color: '#FF9800' }, { name: 'Utilities', budgeted: 200, spent: 190, color: '#9C27B0' },
+      { name: 'Entertainment', budgeted: 200, spent: 150, color: '#E91E63' }, { name: 'Savings', budgeted: 3000, spent: 3000, color: '#8BC34A' }
+    ]},
+    { name: 'Debt Payoff Budget', period: 'monthly', totalIncome: 7000, totalBudget: 6500, categories: [
+      { name: 'Housing', budgeted: 1600, spent: 1600, color: '#4CAF50' }, { name: 'Food', budgeted: 600, spent: 580, color: '#2196F3' },
+      { name: 'Debt Payments', budgeted: 2500, spent: 2500, color: '#F44336' }, { name: 'Utilities', budgeted: 300, spent: 290, color: '#9C27B0' },
+      { name: 'Transportation', budgeted: 400, spent: 380, color: '#FF9800' }, { name: 'Savings', budgeted: 500, spent: 500, color: '#8BC34A' },
+      { name: 'Other', budgeted: 600, spent: 550, color: '#607D8B' }
+    ]},
+    { name: 'Vacation Savings Budget', period: 'monthly', totalIncome: 9000, totalBudget: 7500, categories: [
+      { name: 'Housing', budgeted: 2200, spent: 2200, color: '#4CAF50' }, { name: 'Food', budgeted: 700, spent: 650, color: '#2196F3' },
+      { name: 'Transportation', budgeted: 500, spent: 480, color: '#FF9800' }, { name: 'Utilities', budgeted: 350, spent: 340, color: '#9C27B0' },
+      { name: 'Vacation Fund', budgeted: 1200, spent: 1200, color: '#00BCD4' }, { name: 'Savings', budgeted: 1500, spent: 1500, color: '#8BC34A' },
+      { name: 'Other', budgeted: 1050, spent: 900, color: '#607D8B' }
+    ]},
+    { name: 'Freelancer Budget', period: 'monthly', totalIncome: 6500, totalBudget: 5800, categories: [
+      { name: 'Housing', budgeted: 1500, spent: 1500, color: '#4CAF50' }, { name: 'Food', budgeted: 600, spent: 550, color: '#2196F3' },
+      { name: 'Business Expenses', budgeted: 800, spent: 920, color: '#FF5722' }, { name: 'Utilities', budgeted: 250, spent: 240, color: '#9C27B0' },
+      { name: 'Taxes', budgeted: 1300, spent: 1300, color: '#F44336' }, { name: 'Healthcare', budgeted: 450, spent: 450, color: '#00BCD4' },
+      { name: 'Savings', budgeted: 500, spent: 400, color: '#8BC34A' }, { name: 'Other', budgeted: 400, spent: 350, color: '#607D8B' }
+    ]},
+    { name: 'Minimalist Budget', period: 'monthly', totalIncome: 4000, totalBudget: 3200, categories: [
+      { name: 'Housing', budgeted: 1200, spent: 1200, color: '#4CAF50' }, { name: 'Food', budgeted: 350, spent: 340, color: '#2196F3' },
+      { name: 'Transportation', budgeted: 200, spent: 180, color: '#FF9800' }, { name: 'Utilities', budgeted: 150, spent: 140, color: '#9C27B0' },
+      { name: 'Savings', budgeted: 800, spent: 800, color: '#8BC34A' }, { name: 'Other', budgeted: 500, spent: 420, color: '#607D8B' }
+    ]},
+    { name: 'DINK Household', period: 'monthly', totalIncome: 15000, totalBudget: 11000, categories: [
+      { name: 'Housing', budgeted: 3500, spent: 3500, color: '#4CAF50' }, { name: 'Food', budgeted: 1200, spent: 1100, color: '#2196F3' },
+      { name: 'Transportation', budgeted: 800, spent: 750, color: '#FF9800' }, { name: 'Utilities', budgeted: 400, spent: 380, color: '#9C27B0' },
+      { name: 'Entertainment', budgeted: 1000, spent: 1200, color: '#E91E63' }, { name: 'Travel', budgeted: 1000, spent: 800, color: '#00BCD4' },
+      { name: 'Savings', budgeted: 3100, spent: 3100, color: '#8BC34A' }
+    ]},
+    { name: 'New Parent Budget', period: 'monthly', totalIncome: 9500, totalBudget: 8500, categories: [
+      { name: 'Housing', budgeted: 2200, spent: 2200, color: '#4CAF50' }, { name: 'Food', budgeted: 900, spent: 950, color: '#2196F3' },
+      { name: 'Baby Expenses', budgeted: 1200, spent: 1400, color: '#E91E63' }, { name: 'Healthcare', budgeted: 600, spent: 580, color: '#00BCD4' },
+      { name: 'Utilities', budgeted: 350, spent: 340, color: '#9C27B0' }, { name: 'Savings', budgeted: 1000, spent: 800, color: '#8BC34A' },
+      { name: 'Transportation', budgeted: 500, spent: 480, color: '#FF9800' }, { name: 'Other', budgeted: 750, spent: 700, color: '#607D8B' }
+    ]},
+    { name: 'Retirement Prep Budget', period: 'monthly', totalIncome: 11000, totalBudget: 7500, categories: [
+      { name: 'Housing', budgeted: 1800, spent: 1800, color: '#4CAF50' }, { name: 'Food', budgeted: 700, spent: 680, color: '#2196F3' },
+      { name: 'Healthcare', budgeted: 600, spent: 550, color: '#00BCD4' }, { name: 'Retirement Savings', budgeted: 3000, spent: 3000, color: '#8BC34A' },
+      { name: 'Utilities', budgeted: 300, spent: 290, color: '#9C27B0' }, { name: 'Entertainment', budgeted: 400, spent: 350, color: '#E91E63' },
+      { name: 'Other', budgeted: 700, spent: 600, color: '#607D8B' }
+    ]},
+    { name: 'Side Hustle Budget', period: 'monthly', totalIncome: 3500, totalBudget: 2800, categories: [
+      { name: 'Business Tools', budgeted: 200, spent: 180, color: '#FF5722' }, { name: 'Marketing', budgeted: 300, spent: 350, color: '#E91E63' },
+      { name: 'Supplies', budgeted: 500, spent: 480, color: '#FF9800' }, { name: 'Taxes', budgeted: 700, spent: 700, color: '#F44336' },
+      { name: 'Savings', budgeted: 800, spent: 600, color: '#8BC34A' }, { name: 'Other', budgeted: 300, spent: 250, color: '#607D8B' }
+    ]},
+    { name: 'Pet Owner Budget', period: 'monthly', totalIncome: 7500, totalBudget: 6200, categories: [
+      { name: 'Housing', budgeted: 1800, spent: 1800, color: '#4CAF50' }, { name: 'Food', budgeted: 600, spent: 580, color: '#2196F3' },
+      { name: 'Pet Expenses', budgeted: 350, spent: 400, color: '#795548' }, { name: 'Transportation', budgeted: 400, spent: 380, color: '#FF9800' },
+      { name: 'Utilities', budgeted: 250, spent: 240, color: '#9C27B0' }, { name: 'Entertainment', budgeted: 300, spent: 350, color: '#E91E63' },
+      { name: 'Savings', budgeted: 1200, spent: 1100, color: '#8BC34A' }, { name: 'Other', budgeted: 500, spent: 450, color: '#607D8B' }
+    ]},
+    { name: 'Wedding Planning Budget', period: 'monthly', totalIncome: 8000, totalBudget: 7000, categories: [
+      { name: 'Housing', budgeted: 1600, spent: 1600, color: '#4CAF50' }, { name: 'Food', budgeted: 500, spent: 480, color: '#2196F3' },
+      { name: 'Wedding Fund', budgeted: 2000, spent: 2000, color: '#E91E63' }, { name: 'Transportation', budgeted: 350, spent: 340, color: '#FF9800' },
+      { name: 'Utilities', budgeted: 250, spent: 240, color: '#9C27B0' }, { name: 'Savings', budgeted: 800, spent: 800, color: '#8BC34A' },
+      { name: 'Other', budgeted: 500, spent: 450, color: '#607D8B' }
+    ]},
+    { name: 'Home Buyer Saving Budget', period: 'monthly', totalIncome: 9000, totalBudget: 6500, categories: [
+      { name: 'Housing', budgeted: 1500, spent: 1500, color: '#4CAF50' }, { name: 'Food', budgeted: 600, spent: 570, color: '#2196F3' },
+      { name: 'Down Payment Fund', budgeted: 2500, spent: 2500, color: '#3F51B5' }, { name: 'Transportation', budgeted: 400, spent: 380, color: '#FF9800' },
+      { name: 'Utilities', budgeted: 250, spent: 240, color: '#9C27B0' }, { name: 'Savings', budgeted: 750, spent: 750, color: '#8BC34A' },
+      { name: 'Other', budgeted: 500, spent: 420, color: '#607D8B' }
+    ]},
+    { name: 'Health-Focused Budget', period: 'monthly', totalIncome: 7000, totalBudget: 6000, categories: [
+      { name: 'Housing', budgeted: 1600, spent: 1600, color: '#4CAF50' }, { name: 'Healthy Food', budgeted: 800, spent: 850, color: '#2196F3' },
+      { name: 'Gym & Fitness', budgeted: 200, spent: 200, color: '#E91E63' }, { name: 'Healthcare', budgeted: 400, spent: 380, color: '#00BCD4' },
+      { name: 'Supplements', budgeted: 150, spent: 140, color: '#FF9800' }, { name: 'Savings', budgeted: 1000, spent: 900, color: '#8BC34A' },
+      { name: 'Other', budgeted: 850, spent: 780, color: '#607D8B' }
+    ]},
+    { name: 'Weekly Groceries Only', period: 'weekly', totalIncome: 2000, totalBudget: 400, categories: [
+      { name: 'Groceries', budgeted: 250, spent: 230, color: '#4CAF50' }, { name: 'Eating Out', budgeted: 100, spent: 120, color: '#FF9800' },
+      { name: 'Snacks', budgeted: 50, spent: 45, color: '#E91E63' }
+    ]},
+    { name: 'Annual Subscription Budget', period: 'yearly', totalIncome: 96000, totalBudget: 5000, categories: [
+      { name: 'Streaming', budgeted: 600, spent: 550, color: '#E91E63' }, { name: 'Software', budgeted: 1200, spent: 1100, color: '#3F51B5' },
+      { name: 'Memberships', budgeted: 800, spent: 750, color: '#00BCD4' }, { name: 'Insurance', budgeted: 2400, spent: 2400, color: '#FF5722' }
+    ]},
+    { name: 'Emergency Spending Plan', period: 'monthly', totalIncome: 6000, totalBudget: 5500, categories: [
+      { name: 'Housing', budgeted: 1400, spent: 1400, color: '#4CAF50' }, { name: 'Food', budgeted: 400, spent: 380, color: '#2196F3' },
+      { name: 'Emergency Fund', budgeted: 1500, spent: 1500, color: '#F44336' }, { name: 'Utilities', budgeted: 200, spent: 190, color: '#9C27B0' },
+      { name: 'Transportation', budgeted: 300, spent: 280, color: '#FF9800' }, { name: 'Other', budgeted: 700, spent: 650, color: '#607D8B' }
+    ]},
+    { name: 'Travel Enthusiast Budget', period: 'monthly', totalIncome: 8500, totalBudget: 7200, categories: [
+      { name: 'Housing', budgeted: 1800, spent: 1800, color: '#4CAF50' }, { name: 'Food', budgeted: 600, spent: 570, color: '#2196F3' },
+      { name: 'Travel Fund', budgeted: 1500, spent: 1500, color: '#00BCD4' }, { name: 'Transportation', budgeted: 400, spent: 380, color: '#FF9800' },
+      { name: 'Utilities', budgeted: 300, spent: 290, color: '#9C27B0' }, { name: 'Entertainment', budgeted: 300, spent: 350, color: '#E91E63' },
+      { name: 'Savings', budgeted: 1000, spent: 900, color: '#8BC34A' }, { name: 'Other', budgeted: 300, spent: 280, color: '#607D8B' }
+    ]},
+    { name: 'Tech Professional Budget', period: 'monthly', totalIncome: 13000, totalBudget: 9500, categories: [
+      { name: 'Housing', budgeted: 3000, spent: 3000, color: '#4CAF50' }, { name: 'Food', budgeted: 1000, spent: 950, color: '#2196F3' },
+      { name: 'Tech & Gadgets', budgeted: 500, spent: 600, color: '#3F51B5' }, { name: 'Transportation', budgeted: 600, spent: 550, color: '#FF9800' },
+      { name: 'Utilities', budgeted: 400, spent: 380, color: '#9C27B0' }, { name: 'Entertainment', budgeted: 500, spent: 550, color: '#E91E63' },
+      { name: 'Savings', budgeted: 2500, spent: 2500, color: '#8BC34A' }, { name: 'Other', budgeted: 1000, spent: 850, color: '#607D8B' }
+    ]},
+    { name: 'Charitable Giving Budget', period: 'monthly', totalIncome: 10000, totalBudget: 8000, categories: [
+      { name: 'Housing', budgeted: 2000, spent: 2000, color: '#4CAF50' }, { name: 'Food', budgeted: 700, spent: 680, color: '#2196F3' },
+      { name: 'Charitable Giving', budgeted: 1000, spent: 1000, color: '#E91E63' }, { name: 'Transportation', budgeted: 500, spent: 480, color: '#FF9800' },
+      { name: 'Utilities', budgeted: 300, spent: 290, color: '#9C27B0' }, { name: 'Savings', budgeted: 2000, spent: 2000, color: '#8BC34A' },
+      { name: 'Other', budgeted: 500, spent: 450, color: '#607D8B' }
+    ]},
+    { name: 'College Student Budget', period: 'monthly', totalIncome: 1800, totalBudget: 1700, categories: [
+      { name: 'Rent', budgeted: 700, spent: 700, color: '#4CAF50' }, { name: 'Food', budgeted: 300, spent: 320, color: '#2196F3' },
+      { name: 'Books & Supplies', budgeted: 150, spent: 130, color: '#3F51B5' }, { name: 'Transportation', budgeted: 100, spent: 90, color: '#FF9800' },
+      { name: 'Entertainment', budgeted: 150, spent: 180, color: '#E91E63' }, { name: 'Phone', budgeted: 50, spent: 50, color: '#9C27B0' },
+      { name: 'Savings', budgeted: 150, spent: 100, color: '#8BC34A' }, { name: 'Other', budgeted: 100, spent: 80, color: '#607D8B' }
+    ]},
+    { name: 'Post-Divorce Budget', period: 'monthly', totalIncome: 5500, totalBudget: 5000, categories: [
+      { name: 'Housing', budgeted: 1500, spent: 1500, color: '#4CAF50' }, { name: 'Food', budgeted: 500, spent: 480, color: '#2196F3' },
+      { name: 'Child Support', budgeted: 1200, spent: 1200, color: '#F44336' }, { name: 'Transportation', budgeted: 400, spent: 380, color: '#FF9800' },
+      { name: 'Utilities', budgeted: 250, spent: 240, color: '#9C27B0' }, { name: 'Savings', budgeted: 500, spent: 400, color: '#8BC34A' },
+      { name: 'Other', budgeted: 650, spent: 600, color: '#607D8B' }
+    ]}
+  ];
+  for (const plan of budgetPlansData) {
+    await prisma.budgetPlan.create({ data: { userId: demoUser.id, ...plan } });
+  }
+
+  // Create 100 expenses for demo user
+  const expenseCategories = ['Housing', 'Food', 'Transportation', 'Utilities', 'Entertainment', 'Healthcare', 'Shopping', 'Other'];
+  const merchantNames = ['Walmart', 'Amazon', 'Target', 'Costco', 'Starbucks', 'Shell', 'Netflix', 'Spotify', 'Apple', 'CVS', 'Whole Foods', 'Trader Joes', 'Home Depot', 'Best Buy', 'Uber'];
+  const expenseDescriptions = [
+    'Weekly groceries', 'Gas fill-up', 'Monthly subscription', 'Office supplies', 'Dinner out',
+    'Coffee run', 'Online purchase', 'Medical copay', 'Car maintenance', 'Home repair',
+    'Birthday gift', 'Dry cleaning', 'Parking', 'Pharmacy', 'Gym membership',
+    'Pet food', 'Haircut', 'Movie tickets', 'Books', 'Clothing'
+  ];
+  for (let i = 0; i < 100; i++) {
+    await prisma.expense.create({ data: {
+      userId: demoUser.id,
+      amount: randomFloat(5, 350),
+      category: randomItem(expenseCategories),
+      merchant: randomItem(merchantNames),
+      description: randomItem(expenseDescriptions),
+      date: randomDate(new Date('2024-08-01'), new Date()),
+      isRecurring: Math.random() > 0.8,
+      recurringFrequency: Math.random() > 0.8 ? randomItem(['weekly', 'monthly', 'yearly']) : null,
+    }});
+  }
+  console.log(`   ✓ Created ${budgetPlansData.length} budget plans and 100 expenses`);
+
+  // ============== SEED GOAL TRACKER (15+) ==============
+  console.log('\n🎯 Seeding goal tracker...');
+  const goalsData = [
+    { name: 'Emergency Fund', description: '6 months of expenses', category: 'emergency_fund', targetAmount: 25000, currentAmount: 15000, priority: 1, monthlyContribution: 500 },
+    { name: 'Down Payment for House', description: 'Save for 20% down payment', category: 'savings', targetAmount: 80000, currentAmount: 35000, priority: 2, monthlyContribution: 1500 },
+    { name: 'Pay Off Credit Cards', description: 'Eliminate credit card debt', category: 'debt_payoff', targetAmount: 8500, currentAmount: 3200, priority: 1, monthlyContribution: 800 },
+    { name: 'Vacation Fund', description: 'European trip next year', category: 'savings', targetAmount: 5000, currentAmount: 2100, priority: 3, monthlyContribution: 250 },
+    { name: 'New Car Fund', description: 'Save for car down payment', category: 'purchase', targetAmount: 15000, currentAmount: 6500, priority: 2, monthlyContribution: 400 },
+    { name: 'Retirement Boost', description: 'Extra retirement savings', category: 'retirement', targetAmount: 50000, currentAmount: 12000, priority: 2, monthlyContribution: 1000 },
+    { name: 'Wedding Fund', description: 'Save for wedding expenses', category: 'savings', targetAmount: 20000, currentAmount: 8500, priority: 3, monthlyContribution: 600 },
+    { name: 'Student Loan Payoff', description: 'Pay off remaining student loans', category: 'debt_payoff', targetAmount: 25000, currentAmount: 18000, priority: 1, monthlyContribution: 700 },
+    { name: 'Home Renovation', description: 'Kitchen remodel', category: 'purchase', targetAmount: 30000, currentAmount: 5000, priority: 4, monthlyContribution: 500 },
+    { name: 'Investment Portfolio', description: 'Build investment portfolio', category: 'investment', targetAmount: 100000, currentAmount: 25000, priority: 2, monthlyContribution: 1500 },
+    { name: 'College Fund', description: 'Kids college savings', category: 'education', targetAmount: 150000, currentAmount: 28000, priority: 2, monthlyContribution: 800 },
+    { name: 'Business Startup', description: 'Seed money for side business', category: 'savings', targetAmount: 25000, currentAmount: 7500, priority: 3, monthlyContribution: 400 },
+    { name: 'Medical Expenses Fund', description: 'HSA/medical fund', category: 'emergency_fund', targetAmount: 10000, currentAmount: 4500, priority: 2, monthlyContribution: 300 },
+    { name: 'Travel Fund', description: 'Annual family vacations', category: 'savings', targetAmount: 8000, currentAmount: 2000, priority: 4, monthlyContribution: 200 },
+    { name: 'Pay Off Car Loan', description: 'Finish car payments early', category: 'debt_payoff', targetAmount: 12000, currentAmount: 9500, priority: 1, monthlyContribution: 600 }
+  ];
+  for (const goal of goalsData) {
+    await prisma.financialGoal.create({ data: { userId: demoUser.id, ...goal } });
+  }
+  console.log(`   ✓ Created ${goalsData.length} goal tracker entries`);
+
+  // ============== SEED BILL NEGOTIATOR (15+) ==============
+  console.log('\n📞 Seeding bill negotiator...');
+  const billsData = [
+    { billType: 'internet', provider: 'Comcast Xfinity', currentAmount: 89.99, originalAmount: 99.99, frequency: 'monthly', dueDate: 15 },
+    { billType: 'cable', provider: 'DirecTV', currentAmount: 125.00, originalAmount: 125.00, frequency: 'monthly', dueDate: 1 },
+    { billType: 'phone', provider: 'Verizon Wireless', currentAmount: 85.00, originalAmount: 95.00, frequency: 'monthly', dueDate: 22 },
+    { billType: 'insurance', provider: 'State Farm Auto', currentAmount: 145.00, originalAmount: 160.00, frequency: 'monthly', dueDate: 5 },
+    { billType: 'subscription', provider: 'Netflix', currentAmount: 15.99, originalAmount: 15.99, frequency: 'monthly', dueDate: 10 },
+    { billType: 'utility', provider: 'Duke Energy', currentAmount: 185.00, originalAmount: 185.00, frequency: 'monthly', dueDate: 20 },
+    { billType: 'gym', provider: 'Planet Fitness', currentAmount: 24.99, originalAmount: 24.99, frequency: 'monthly', dueDate: 1 },
+    { billType: 'streaming', provider: 'Spotify Premium', currentAmount: 10.99, originalAmount: 10.99, frequency: 'monthly', dueDate: 15 },
+    { billType: 'internet', provider: 'AT&T Fiber', currentAmount: 75.00, originalAmount: 80.00, frequency: 'monthly', dueDate: 8 },
+    { billType: 'phone', provider: 'T-Mobile', currentAmount: 70.00, originalAmount: 80.00, frequency: 'monthly', dueDate: 25 },
+    { billType: 'subscription', provider: 'Amazon Prime', currentAmount: 139.00, originalAmount: 139.00, frequency: 'yearly', dueDate: 1 },
+    { billType: 'insurance', provider: 'Allstate Home', currentAmount: 175.00, originalAmount: 200.00, frequency: 'monthly', dueDate: 12 },
+    { billType: 'utility', provider: 'Water Utility', currentAmount: 65.00, originalAmount: 65.00, frequency: 'monthly', dueDate: 28 },
+    { billType: 'streaming', provider: 'Disney+', currentAmount: 13.99, originalAmount: 13.99, frequency: 'monthly', dueDate: 5 },
+    { billType: 'gym', provider: 'LA Fitness', currentAmount: 34.99, originalAmount: 39.99, frequency: 'monthly', dueDate: 1 }
+  ];
+  for (const bill of billsData) {
+    await prisma.bill.create({ data: { userId: demoUser.id, ...bill } });
+  }
+  console.log(`   ✓ Created ${billsData.length} bill negotiator entries`);
+
   // ============== SUMMARY ==============
   console.log('\n' + '═'.repeat(60));
   console.log('✅ SEED COMPLETE! Summary:');
@@ -736,6 +1193,16 @@ async function main() {
   console.log(`   📥 Transaction Imports:  ${transactionImports.length}`);
   console.log(`   🏦 Plaid Connections:    ${plaidConnections.length}`);
   console.log(`   🤖 AI Analysis Logs:     ${aiLogs.length}`);
+  console.log('   --- NEW FEATURES ---');
+  console.log(`   📊 Stocks:               ${stocksData.length}`);
+  console.log(`   ₿ Cryptos:               ${cryptosData.length}`);
+  console.log(`   🏦 Loans:                ${loansData.length}`);
+  console.log(`   🔒 Insurance Policies:   ${insuranceData.length}`);
+  console.log(`   🏖️ Retirement Plans:     ${retirementData.length}`);
+  console.log(`   💰 Budget Plans:         ${budgetPlansData.length}`);
+  console.log(`   📋 Expenses:             100`);
+  console.log(`   🎯 Financial Goals:      ${goalsData.length}`);
+  console.log(`   📞 Bills:                ${billsData.length}`);
   console.log('═'.repeat(60));
   console.log('\n🎉 Demo credentials: demo@aifinance.com / demo123456\n');
 }

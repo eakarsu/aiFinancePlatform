@@ -1,0 +1,11 @@
+Admin User:
+  - Email: admin@trading.com
+  - Password: admin123
+
+  Trader User:
+  - Email: trader1@trading.com
+  - Password: trader123
+
+  Investor User:
+  - Email: investor1@trading.com
+  - Password: investor123

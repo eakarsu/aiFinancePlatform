@@ -11,7 +11,7 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Configuration
+# Configuration (avoiding port 5000 as requested)
 BACKEND_PORT=3002
 FRONTEND_PORT=3000
 
@@ -32,8 +32,8 @@ pkill -9 -f "nodemon" 2>/dev/null || true
 pkill -9 -f "react-scripts" 2>/dev/null || true
 sleep 1
 
-# Kill by port - be aggressive
-for port in 3000 3001 3002 5173 8080; do
+# Kill by port - be aggressive (avoiding 5000)
+for port in 3000 3002 5173 8080; do
     pids=$(lsof -ti:$port 2>/dev/null)
     if [ -n "$pids" ]; then
         echo -e "${YELLOW}Killing processes on port $port${NC}"

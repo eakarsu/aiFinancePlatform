@@ -1,13 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { User, Lock, Bell, Shield, Download, Trash2, Monitor, Smartphone, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import ConfirmDialog from '../components/ConfirmDialog';
 import {
   getNotificationPreferences,
   updateNotificationPreferences,
   updateProfile,
   changePassword,
   deleteAccount,
-  exportUserData
+  exportUserData,
+  logout as apiLogout,
+  setup2FA,
+  verify2FA,
+  disable2FA
 } from '../services/api';
 
 function Settings() {
@@ -36,6 +42,16 @@ function Settings() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
 
+  // 2FA state
+  const [twoFAEnabled, setTwoFAEnabled] = useState(user?.twoFactorEnabled || false);
+  const [twoFASetup, setTwoFASetup] = useState(null); // { qrCode, secret }
+  const [twoFACode, setTwoFACode] = useState('');
+  const [disablePassword, setDisablePassword] = useState('');
+  const [showDisable2FA, setShowDisable2FA] = useState(false);
+
+  // Confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState({ open: false });
+
   useEffect(() => {
     loadPreferences();
   }, []);
@@ -63,7 +79,6 @@ function Settings() {
         lastName: profile.lastName,
         phone: profile.phone
       });
-      // Update the user context with new data
       if (updateUser && response.data.user) {
         updateUser(response.data.user);
       }
@@ -101,28 +116,42 @@ function Settings() {
     }
   };
 
-  const handleDeleteAccount = async () => {
-    if (!window.confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      return;
-    }
-    if (!window.confirm('This will permanently delete all your data. Type "DELETE" to confirm.')) {
-      return;
-    }
+  const handleDeleteAccount = () => {
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Account',
+      message: 'This will permanently delete your account and all associated data. This action cannot be undone.',
+      variant: 'danger',
+      confirmText: 'Delete My Account',
+      onConfirm: async () => {
+        setConfirmDialog({ open: false });
+        try {
+          await deleteAccount();
+          logout();
+          navigate('/');
+        } catch (error) {
+          console.error('Delete account error:', error);
+          setMessage({ type: 'error', text: 'Failed to delete account' });
+        }
+      },
+      onCancel: () => setConfirmDialog({ open: false })
+    });
+  };
+
+  const handleLogout = async () => {
     try {
-      await deleteAccount();
-      logout();
-      navigate('/');
-    } catch (error) {
-      console.error('Delete account error:', error);
-      setMessage({ type: 'error', text: 'Failed to delete account' });
+      await apiLogout();
+    } catch (e) {
+      // Logout even if API call fails
     }
+    logout();
+    navigate('/login');
   };
 
   const handleExportData = async () => {
     try {
       setSaving(true);
       const response = await exportUserData();
-      // Download as JSON file
       const dataStr = JSON.stringify(response.data, null, 2);
       const dataBlob = new Blob([dataStr], { type: 'application/json' });
       const url = URL.createObjectURL(dataBlob);
@@ -137,6 +166,54 @@ function Settings() {
     } catch (error) {
       console.error('Export data error:', error);
       setMessage({ type: 'error', text: 'Failed to export data' });
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  // 2FA handlers
+  const handleSetup2FA = async () => {
+    try {
+      setSaving(true);
+      const response = await setup2FA();
+      setTwoFASetup(response.data);
+      setMessage({ type: 'success', text: 'Scan the QR code with your authenticator app' });
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to setup 2FA' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleVerify2FA = async (e) => {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      await verify2FA(twoFACode);
+      setTwoFAEnabled(true);
+      setTwoFASetup(null);
+      setTwoFACode('');
+      setMessage({ type: 'success', text: '2FA enabled successfully!' });
+    } catch (error) {
+      setMessage({ type: 'error', text: error.response?.data?.error || 'Invalid code' });
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMessage(null), 3000);
+    }
+  };
+
+  const handleDisable2FA = async (e) => {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      await disable2FA(disablePassword);
+      setTwoFAEnabled(false);
+      setShowDisable2FA(false);
+      setDisablePassword('');
+      setMessage({ type: 'success', text: '2FA disabled' });
+    } catch (error) {
+      setMessage({ type: 'error', text: error.response?.data?.error || 'Failed to disable 2FA' });
     } finally {
       setSaving(false);
       setTimeout(() => setMessage(null), 3000);
@@ -183,12 +260,12 @@ function Settings() {
   };
 
   const categoryLabels = {
-    fraud: { label: 'Fraud Detection', icon: '🛡️' },
-    credit: { label: 'Credit Score', icon: '💳' },
-    portfolio: { label: 'Portfolio', icon: '📈' },
-    security: { label: 'Security', icon: '🔒' },
-    transaction: { label: 'Transactions', icon: '💰' },
-    general: { label: 'General', icon: '📋' }
+    fraud: { label: 'Fraud Detection', icon: <Shield size={18} /> },
+    credit: { label: 'Credit Score', icon: <Monitor size={18} /> },
+    portfolio: { label: 'Portfolio', icon: <Monitor size={18} /> },
+    security: { label: 'Security', icon: <Lock size={18} /> },
+    transaction: { label: 'Transactions', icon: <Monitor size={18} /> },
+    general: { label: 'General', icon: <Bell size={18} /> }
   };
 
   return (
@@ -201,25 +278,25 @@ function Settings() {
           className={`tab ${activeTab === 'profile' ? 'active' : ''}`}
           onClick={() => setActiveTab('profile')}
         >
-          👤 Profile
+          <User size={16} style={{marginRight:'6px',verticalAlign:'middle'}} /> Profile
         </button>
         <button
           className={`tab ${activeTab === 'notifications' ? 'active' : ''}`}
           onClick={() => setActiveTab('notifications')}
         >
-          🔔 Notifications
+          <Bell size={16} style={{marginRight:'6px',verticalAlign:'middle'}} /> Notifications
         </button>
         <button
           className={`tab ${activeTab === 'security' ? 'active' : ''}`}
           onClick={() => setActiveTab('security')}
         >
-          🔐 Security
+          <Lock size={16} style={{marginRight:'6px',verticalAlign:'middle'}} /> Security
         </button>
         <button
           className={`tab ${activeTab === 'data' ? 'active' : ''}`}
           onClick={() => setActiveTab('data')}
         >
-          📊 Data & Privacy
+          <Shield size={16} style={{marginRight:'6px',verticalAlign:'middle'}} /> Data & Privacy
         </button>
       </div>
 
@@ -410,10 +487,71 @@ function Settings() {
           <div className="security-option">
             <h3>Two-Factor Authentication</h3>
             <p>Add an extra layer of security to your account</p>
-            <div className="two-factor-status">
-              <span className="status-badge disabled">Not Enabled</span>
-              <button className="btn-secondary">Enable 2FA</button>
-            </div>
+
+            {twoFAEnabled ? (
+              <div className="two-factor-status">
+                <span className="status-badge enabled">
+                  <CheckCircle size={14} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                  Enabled
+                </span>
+                {showDisable2FA ? (
+                  <form onSubmit={handleDisable2FA} style={{ marginTop: '12px' }}>
+                    <div className="form-group">
+                      <label>Enter your password to disable 2FA</label>
+                      <input
+                        type="password"
+                        value={disablePassword}
+                        onChange={(e) => setDisablePassword(e.target.value)}
+                        placeholder="Your account password"
+                        required
+                      />
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button type="submit" className="btn-danger" disabled={saving}>Disable 2FA</button>
+                      <button type="button" className="btn-secondary" onClick={() => setShowDisable2FA(false)}>Cancel</button>
+                    </div>
+                  </form>
+                ) : (
+                  <button className="btn-secondary" onClick={() => setShowDisable2FA(true)}>Disable 2FA</button>
+                )}
+              </div>
+            ) : twoFASetup ? (
+              <div className="two-factor-setup">
+                <p>Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
+                <div className="qr-code-container">
+                  <img src={twoFASetup.qrCode} alt="2FA QR Code" className="qr-code-img" />
+                </div>
+                <p className="two-factor-secret">
+                  Manual entry code: <code>{twoFASetup.secret}</code>
+                </p>
+                <form onSubmit={handleVerify2FA} style={{ marginTop: '12px' }}>
+                  <div className="form-group">
+                    <label>Enter the 6-digit code from your app</label>
+                    <input
+                      type="text"
+                      value={twoFACode}
+                      onChange={(e) => setTwoFACode(e.target.value)}
+                      placeholder="000000"
+                      maxLength={6}
+                      style={{ textAlign: 'center', fontSize: '1.2rem', letterSpacing: '4px' }}
+                      required
+                    />
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button type="submit" className="btn-primary" disabled={saving}>Verify & Enable</button>
+                    <button type="button" className="btn-secondary" onClick={() => setTwoFASetup(null)}>Cancel</button>
+                  </div>
+                </form>
+              </div>
+            ) : (
+              <div className="two-factor-status">
+                <span className="status-badge disabled">Not Enabled</span>
+                <button className="btn-secondary" onClick={handleSetup2FA} disabled={saving}>
+                  <Smartphone size={16} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                  {saving ? 'Setting up...' : 'Enable 2FA'}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="security-option">
@@ -421,7 +559,7 @@ function Settings() {
             <p>Manage devices where you're logged in</p>
             <div className="sessions-list">
               <div className="session-item current">
-                <span className="device-icon">💻</span>
+                <span className="device-icon"><Monitor size={24} /></span>
                 <div className="session-info">
                   <span className="device-name">Current Device</span>
                   <span className="session-details">Last active: Now</span>
@@ -433,7 +571,7 @@ function Settings() {
 
           <div className="security-option danger-zone">
             <h3>Danger Zone</h3>
-            <button className="btn-danger" onClick={logout}>
+            <button className="btn-danger" onClick={handleLogout}>
               Sign Out
             </button>
           </div>
@@ -449,7 +587,7 @@ function Settings() {
             <h3>Export Your Data</h3>
             <p>Download a copy of all your data stored on our platform</p>
             <button className="btn-secondary" onClick={handleExportData} disabled={saving}>
-              {saving ? 'Exporting...' : '📥 Request Data Export'}
+              {saving ? 'Exporting...' : <><Download size={16} style={{marginRight:'4px',verticalAlign:'middle'}} /> Request Data Export</>}
             </button>
           </div>
 
@@ -471,11 +609,21 @@ function Settings() {
             <h3>Delete Account</h3>
             <p>Permanently delete your account and all associated data. This action cannot be undone.</p>
             <button className="btn-danger" onClick={handleDeleteAccount}>
-              🗑️ Delete My Account
+              <Trash2 size={16} style={{marginRight:'4px',verticalAlign:'middle'}} /> Delete My Account
             </button>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        variant={confirmDialog.variant}
+        confirmText={confirmDialog.confirmText}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={confirmDialog.onCancel}
+      />
     </div>
   );
 }

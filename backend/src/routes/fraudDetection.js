@@ -3,6 +3,7 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const fraudEngine = require('../utils/fraudDetectionEngine');
 const alertsEngine = require('../utils/alertsEngine');
+const { paginatedQuery, bulkDelete, handleExport } = require('../utils/queryHelpers');
 
 // OpenRouter AI helper
 async function callOpenRouter(prompt, systemPrompt = '') {
@@ -62,17 +63,39 @@ router.post('/transactions', authenticateToken, async (req, res) => {
 router.get('/transactions', authenticateToken, async (req, res) => {
   try {
     const prisma = req.app.get('prisma');
-    const { limit = 50 } = req.query;
-
-    const transactions = await prisma.transaction.findMany({
-      where: { userId: req.user.id },
-      orderBy: { createdAt: 'desc' },
-      take: parseInt(limit)
+    const { search } = req.query;
+    const result = await paginatedQuery(prisma, 'transaction', {
+      baseWhere: { userId: req.user.id },
+      search,
+      searchFields: ['merchant', 'category', 'location', 'type'],
+      query: req.query
     });
-
-    res.json(transactions);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: 'Failed to get transactions' });
+  }
+});
+
+// Bulk delete transactions
+router.post('/transactions/bulk-delete', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    // Delete related fraud alerts first
+    await prisma.fraudAlert.deleteMany({ where: { transactionId: { in: req.body.ids }, userId: req.user.id } });
+    const result = await bulkDelete(prisma, 'transaction', req.user.id, req.body.ids);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Bulk delete failed' });
+  }
+});
+
+// Export transactions
+router.get('/transactions/export', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    await handleExport(res, prisma, 'transaction', req.user.id, req.query, 'Transactions', ['type', 'amount', 'merchant', 'category', 'location', 'fraudScore', 'reviewStatus', 'createdAt']);
+  } catch (error) {
+    res.status(500).json({ error: 'Export failed' });
   }
 });
 

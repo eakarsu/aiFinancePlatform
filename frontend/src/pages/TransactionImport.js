@@ -1,12 +1,31 @@
 import React, { useState, useEffect } from 'react';
+import { Upload, FileText, Plus, Calendar, ShoppingCart, Banknote, ArrowLeftRight, RotateCcw, Building2, Coffee, Fuel, ShoppingBag, CheckCircle, XCircle, ClipboardList, FolderUp, Download, Edit2, Trash2, Inbox } from 'lucide-react';
 import {
   importCSV,
+  analyzeTransactions,
   getImportHistory,
   getTransactions,
   addTransaction,
   updateTransaction,
-  deleteTransaction
+  deleteTransaction,
+  bulkDeleteImports,
+  exportImportHistory,
+  downloadExport
 } from '../services/api';
+import SearchBar from '../components/SearchBar';
+import Pagination from '../components/Pagination';
+import BulkActions from '../components/BulkActions';
+import ExportButton from '../components/ExportButton';
+import ConfirmDialog from '../components/ConfirmDialog';
+import LoadingSkeleton from '../components/LoadingSkeleton';
+import EmptyState from '../components/EmptyState';
+import SortControls from '../components/SortControls';
+
+const HISTORY_SORT_COLUMNS = [
+  { field: 'createdAt', label: 'Date' },
+  { field: 'source', label: 'Source' },
+  { field: 'status', label: 'Status' }
+];
 
 function TransactionImport() {
   const [activeTab, setActiveTab] = useState('examples');
@@ -21,6 +40,20 @@ function TransactionImport() {
   const [selectedTransaction, setSelectedTransaction] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [editData, setEditData] = useState({});
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  // Search, sort, pagination state for import history
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [offset, setOffset] = useState(0);
+  const [limit, setLimit] = useState(10);
+  const [total, setTotal] = useState(0);
+
+  // Bulk selection & confirm dialog
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
 
   // Single transaction form
   const [singleTransaction, setSingleTransaction] = useState({
@@ -48,13 +81,18 @@ function TransactionImport() {
 
   useEffect(() => {
     loadExampleTransactions();
-    loadImportHistory();
   }, []);
+
+  useEffect(() => {
+    loadImportHistory();
+  }, [search, sortBy, sortOrder, offset, limit]);
 
   const loadExampleTransactions = async () => {
     try {
       const response = await getTransactions();
-      setExampleTransactions(response.data.slice(0, 30));
+      const result = response.data;
+      const txns = result.data || result;
+      setExampleTransactions(Array.isArray(txns) ? txns.slice(0, 30) : []);
     } catch (error) {
       console.error('Failed to load transactions:', error);
     }
@@ -62,8 +100,10 @@ function TransactionImport() {
 
   const loadImportHistory = async () => {
     try {
-      const response = await getImportHistory();
-      setImportHistory(response.data);
+      const response = await getImportHistory({ search, sortBy, sortOrder, offset, limit });
+      const result = response.data;
+      setImportHistory(result.data || result);
+      setTotal(result.total || (result.data || result).length);
     } catch (error) {
       console.error('Failed to load import history:', error);
     }
@@ -185,24 +225,61 @@ function TransactionImport() {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm('Are you sure you want to delete this transaction?')) return;
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Transaction',
+      message: 'Are you sure you want to delete this transaction?',
+      onConfirm: async () => {
+        setConfirmDialog({ open: false, title: '', message: '', onConfirm: null });
+        try {
+          setLoading(true);
+          await deleteTransaction(selectedTransaction.id);
+          setMessage({ type: 'success', text: 'Transaction deleted successfully!' });
+          setSelectedTransaction(null);
+          loadExampleTransactions();
+        } catch (error) {
+          setMessage({ type: 'error', text: 'Failed to delete transaction' });
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
+  };
 
-    try {
-      setLoading(true);
-      await deleteTransaction(selectedTransaction.id);
-      setMessage({ type: 'success', text: 'Transaction deleted successfully!' });
-      setSelectedTransaction(null);
-      loadExampleTransactions();
-    } catch (error) {
-      setMessage({ type: 'error', text: 'Failed to delete transaction' });
-    } finally {
-      setLoading(false);
-    }
+  const handleBulkDeleteImports = async () => {
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Selected Imports',
+      message: `Are you sure you want to delete ${selectedIds.length} import record(s)? This action cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmDialog({ open: false, title: '', message: '', onConfirm: null });
+        try {
+          await bulkDeleteImports(selectedIds);
+          setSelectedIds([]);
+          loadImportHistory();
+        } catch (error) {
+          console.error('Bulk delete failed:', error);
+        }
+      }
+    });
   };
 
   const handleClose = () => {
     setSelectedTransaction(null);
     setEditMode(false);
+  };
+
+  const handleAIAnalyze = async () => {
+    setAiLoading(true);
+    try {
+      const response = await analyzeTransactions();
+      setAiAnalysis(response.data);
+    } catch (error) {
+      console.error('AI analysis failed:', error);
+      alert('Failed to analyze transactions. Make sure you have transactions and the AI API key is configured.');
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const downloadTemplate = () => {
@@ -244,24 +321,141 @@ function TransactionImport() {
 
   const getTypeIcon = (type) => {
     switch (type) {
-      case 'DEPOSIT': return '💰';
-      case 'REFUND': return '↩️';
-      case 'WITHDRAWAL': return '🏧';
-      case 'TRANSFER': return '↔️';
-      default: return '🛒';
+      case 'DEPOSIT': return <Banknote size={14} />;
+      case 'REFUND': return <RotateCcw size={14} />;
+      case 'WITHDRAWAL': return <Building2 size={14} />;
+      case 'TRANSFER': return <ArrowLeftRight size={14} />;
+      default: return <ShoppingCart size={14} />;
     }
+  };
+
+  const toggleSelectImport = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAllImports = () => {
+    if (selectedIds.length === importHistory.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(importHistory.map(i => i.id));
+    }
+  };
+
+  const handleSort = (field, order) => {
+    setSortBy(field);
+    setSortOrder(order);
+    setOffset(0);
+  };
+
+  const handleSearch = (val) => {
+    setSearch(val);
+    setOffset(0);
+    setSelectedIds([]);
+  };
+
+  const handleExportHistory = (format) => {
+    downloadExport(exportImportHistory, format, 'import-history');
   };
 
   return (
     <div className="transaction-import">
-      <h1>Import Transactions</h1>
-      <p className="subtitle">View example transactions, add single transaction, or bulk import from CSV</p>
+      <div className="page-header">
+        <h1>Import Transactions</h1>
+        <p>View example transactions, add single transaction, or bulk import from CSV</p>
+        <div className="header-actions">
+          <button className="btn-primary" onClick={handleAIAnalyze} disabled={aiLoading || exampleTransactions.length === 0}>
+            {aiLoading ? 'Analyzing...' : 'AI Spending Analysis'}
+          </button>
+        </div>
+      </div>
 
       {/* Message */}
       {message && (
         <div className={`message ${message.type}`}>
-          {message.type === 'success' ? '✅' : '❌'} {message.text}
+          {message.type === 'success' ? <CheckCircle size={16} style={{verticalAlign:'middle',marginRight:'6px'}} /> : <XCircle size={16} style={{verticalAlign:'middle',marginRight:'6px'}} />} {message.text}
           <button onClick={() => setMessage(null)}>×</button>
+        </div>
+      )}
+
+      {/* AI Analysis Results */}
+      {aiAnalysis && (
+        <div className="portfolio-analysis-card">
+          <div className="portfolio-header">
+            <h3>AI Spending Analysis</h3>
+            <button className="btn-close" onClick={() => setAiAnalysis(null)}>×</button>
+          </div>
+          <div className="portfolio-score">
+            <div className="score-circle" style={{
+              backgroundColor: (aiAnalysis.analysis?.healthScore || 0) >= 70 ? '#4CAF50' :
+                (aiAnalysis.analysis?.healthScore || 0) >= 50 ? '#FF9800' : '#f44336'
+            }}>
+              <span className="score">{aiAnalysis.analysis?.healthScore || 0}</span>
+              <span className="label">Health</span>
+            </div>
+            <div className="portfolio-stats">
+              <div><label>Total Spending</label><span>${aiAnalysis.totalSpent?.toFixed(2)}</span></div>
+              <div><label>Total Deposits</label><span>${aiAnalysis.totalDeposited?.toFixed(2)}</span></div>
+              <div><label>Transactions</label><span>{aiAnalysis.transactionCount}</span></div>
+            </div>
+          </div>
+          <div className="portfolio-insights">
+            <p>{aiAnalysis.analysis?.summary}</p>
+          </div>
+
+          {aiAnalysis.analysis?.spendingPatterns?.length > 0 && (
+            <div style={{ marginTop: '1rem' }}>
+              <h4 style={{ color: '#1a237e', marginBottom: '0.5rem' }}>Spending Patterns</h4>
+              {aiAnalysis.analysis.spendingPatterns.map((p, i) => (
+                <div key={i} className={`insight-item ${p.type === 'concern' ? 'over_budget' : p.type === 'good' ? 'on_budget' : ''}`}>
+                  <span className="category">{p.pattern}</span>
+                  <p>{p.description}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {aiAnalysis.analysis?.anomalies?.length > 0 && (
+            <div style={{ marginTop: '1rem' }}>
+              <h4 style={{ color: '#1a237e', marginBottom: '0.5rem' }}>Anomalies Detected</h4>
+              {aiAnalysis.analysis.anomalies.map((a, i) => (
+                <div key={i} className={`recommendation-item ${a.severity}`}>
+                  <p>{a.description}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {aiAnalysis.analysis?.savingsOpportunities?.length > 0 && (
+            <div style={{ marginTop: '1rem' }}>
+              <h4 style={{ color: '#1a237e', marginBottom: '0.5rem' }}>Savings Opportunities</h4>
+              {aiAnalysis.analysis.savingsOpportunities.map((s, i) => (
+                <div key={i} className="recommendation-item low">
+                  <h5>{s.title}</h5>
+                  <p>{s.description}</p>
+                  {s.potentialSavings > 0 && <span className="savings">Save ${s.potentialSavings}/mo</span>}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {aiAnalysis.analysis?.budgetRecommendation && (
+            <div style={{ marginTop: '1rem' }}>
+              <h4 style={{ color: '#1a237e', marginBottom: '0.5rem' }}>Budget Recommendation</h4>
+              <p style={{ color: '#555', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
+                Suggested Monthly Budget: <strong style={{ color: '#1a237e' }}>${aiAnalysis.analysis.budgetRecommendation.suggestedMonthlyBudget}</strong>
+              </p>
+              {aiAnalysis.analysis.budgetRecommendation.breakdown?.map((item, i) => (
+                <div key={i} className="category-bar">
+                  <div className="category-info">
+                    <span className="name">{item.category}</span>
+                    <span className="amounts">Current: ${item.current} → Suggested: ${item.suggested}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p className="powered-by">Powered by OpenRouter AI</p>
         </div>
       )}
 
@@ -271,25 +465,25 @@ function TransactionImport() {
           className={`tab ${activeTab === 'examples' ? 'active' : ''}`}
           onClick={() => setActiveTab('examples')}
         >
-          📋 Example Transactions
+          <ClipboardList size={16} style={{marginRight:'6px',verticalAlign:'middle'}} /> Example Transactions
         </button>
         <button
           className={`tab ${activeTab === 'single' ? 'active' : ''}`}
           onClick={() => setActiveTab('single')}
         >
-          ➕ Add Single
+          <Plus size={16} style={{marginRight:'6px',verticalAlign:'middle'}} /> Add Single
         </button>
         <button
           className={`tab ${activeTab === 'bulk' ? 'active' : ''}`}
           onClick={() => setActiveTab('bulk')}
         >
-          📄 Bulk CSV Import
+          <FileText size={16} style={{marginRight:'6px',verticalAlign:'middle'}} /> Bulk CSV Import
         </button>
         <button
           className={`tab ${activeTab === 'history' ? 'active' : ''}`}
           onClick={() => setActiveTab('history')}
         >
-          📜 Import History
+          <Calendar size={16} style={{marginRight:'6px',verticalAlign:'middle'}} /> Import History
         </button>
       </div>
 
@@ -302,10 +496,13 @@ function TransactionImport() {
           </div>
 
           {exampleTransactions.length === 0 ? (
-            <div className="empty-state">
-              <span className="empty-icon">📭</span>
-              <p>No transactions yet. Add some transactions to get started.</p>
-            </div>
+            <EmptyState
+              icon={<Inbox size={48} />}
+              title="No transactions yet"
+              description="Add some transactions to get started."
+              actionLabel="Add Transaction"
+              onAction={() => setActiveTab('single')}
+            />
           ) : (
             <div className="transactions-list">
               <table className="transactions-table">
@@ -431,7 +628,7 @@ function TransactionImport() {
 
               <div className="form-actions">
                 <button type="submit" className="btn-primary" disabled={loading}>
-                  {loading ? 'Adding...' : '➕ Add Transaction'}
+                  {loading ? 'Adding...' : <><Plus size={16} style={{marginRight:'4px',verticalAlign:'middle'}} /> Add Transaction</>}
                 </button>
                 <button
                   type="button"
@@ -458,22 +655,22 @@ function TransactionImport() {
                   type: 'PURCHASE', amount: '5.75', merchant: 'Starbucks',
                   category: 'Food & Drink', location: 'San Francisco, CA',
                   date: new Date().toISOString().split('T')[0]
-                })}>☕ Coffee</button>
+                })}><Coffee size={14} style={{marginRight:'4px',verticalAlign:'middle'}} /> Coffee</button>
                 <button onClick={() => setSingleTransaction({
                   type: 'PURCHASE', amount: '45.00', merchant: 'Shell Gas Station',
                   category: 'Gas', location: 'San Francisco, CA',
                   date: new Date().toISOString().split('T')[0]
-                })}>⛽ Gas</button>
+                })}><Fuel size={14} style={{marginRight:'4px',verticalAlign:'middle'}} /> Gas</button>
                 <button onClick={() => setSingleTransaction({
                   type: 'PURCHASE', amount: '89.50', merchant: 'Whole Foods',
                   category: 'Groceries', location: 'San Francisco, CA',
                   date: new Date().toISOString().split('T')[0]
-                })}>🛒 Groceries</button>
+                })}><ShoppingBag size={14} style={{marginRight:'4px',verticalAlign:'middle'}} /> Groceries</button>
                 <button onClick={() => setSingleTransaction({
                   type: 'DEPOSIT', amount: '3500.00', merchant: 'Direct Deposit',
                   category: 'Income', location: 'Online',
                   date: new Date().toISOString().split('T')[0]
-                })}>💰 Salary</button>
+                })}><Banknote size={14} style={{marginRight:'4px',verticalAlign:'middle'}} /> Salary</button>
               </div>
             </div>
           </div>
@@ -494,7 +691,7 @@ function TransactionImport() {
                 style={{ display: 'none' }}
               />
               <label htmlFor="csv-input" className="upload-label">
-                <span className="upload-icon">📁</span>
+                <span className="upload-icon"><Upload size={48} /></span>
                 <span className="upload-text">
                   {fileName ? fileName : 'Click to upload or drag & drop'}
                 </span>
@@ -504,7 +701,7 @@ function TransactionImport() {
 
             <div className="template-download">
               <button className="btn-link" onClick={downloadTemplate}>
-                📥 Download CSV Template (15 example transactions)
+                <Download size={16} style={{marginRight:'4px',verticalAlign:'middle'}} /> Download CSV Template (15 example transactions)
               </button>
             </div>
           </div>
@@ -541,7 +738,7 @@ function TransactionImport() {
                   onClick={handleBulkImport}
                   disabled={loading}
                 >
-                  {loading ? 'Importing...' : `📤 Import ${previewData.totalRows} Transactions`}
+                  {loading ? 'Importing...' : <><FolderUp size={16} style={{marginRight:'4px',verticalAlign:'middle'}} /> Import {previewData.totalRows} Transactions</>}
                 </button>
                 <button
                   className="btn-secondary"
@@ -601,41 +798,71 @@ function TransactionImport() {
       {activeTab === 'history' && (
         <div className="history-section">
           <h3>Import History</h3>
+          <div className="list-toolbar">
+            <SearchBar value={search} onChange={handleSearch} placeholder="Search imports..." />
+            <SortControls columns={HISTORY_SORT_COLUMNS} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
+            <ExportButton onExport={handleExportHistory} />
+          </div>
+          <BulkActions selectedCount={selectedIds.length} onDelete={handleBulkDeleteImports} onClear={() => setSelectedIds([])} />
+
           {importHistory.length === 0 ? (
-            <div className="empty-state">
-              <span className="empty-icon">📭</span>
-              <p>No imports yet. Upload a CSV file to get started.</p>
-            </div>
+            <EmptyState
+              icon={<Inbox size={48} />}
+              title="No imports yet"
+              description="Import your first transactions."
+              actionLabel="Import CSV"
+              onAction={() => setActiveTab('bulk')}
+            />
           ) : (
-            <div className="history-list">
-              {importHistory.map(imp => (
-                <div
-                  key={imp.id}
-                  className={`history-item clickable-row ${imp.status?.toLowerCase()}`}
-                  onClick={() => setSelectedTransaction({ ...imp, isImport: true })}
-                >
-                  <div className="history-icon">
-                    {imp.source === 'csv' ? '📄' : imp.source === 'manual' ? '✏️' : '🏦'}
-                  </div>
-                  <div className="history-info">
-                    <div className="history-header">
-                      <span className="source">{imp.source?.toUpperCase()}</span>
-                      <span className={`status ${imp.status?.toLowerCase()}`}>{imp.status}</span>
+            <>
+              <div className="select-all-row">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.length === importHistory.length && importHistory.length > 0}
+                    onChange={toggleSelectAllImports}
+                  />
+                  Select All
+                </label>
+              </div>
+              <div className="history-list">
+                {importHistory.map(imp => (
+                  <div
+                    key={imp.id}
+                    className={`history-item clickable-row ${imp.status?.toLowerCase()}`}
+                    onClick={() => setSelectedTransaction({ ...imp, isImport: true })}
+                  >
+                    <div className="history-checkbox" onClick={e => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.includes(imp.id)}
+                        onChange={() => toggleSelectImport(imp.id)}
+                      />
                     </div>
-                    {imp.fileName && <p className="filename">{imp.fileName}</p>}
-                    <div className="history-stats">
-                      <span className="success">{imp.processedRecords} imported</span>
-                      {imp.failedRecords > 0 && (
-                        <span className="error">{imp.failedRecords} failed</span>
-                      )}
+                    <div className="history-icon">
+                      {imp.source === 'csv' ? <FileText size={20} /> : imp.source === 'manual' ? <Edit2 size={20} /> : <Building2 size={20} />}
                     </div>
-                    <p className="history-date">
-                      {new Date(imp.createdAt).toLocaleString()}
-                    </p>
+                    <div className="history-info">
+                      <div className="history-header">
+                        <span className="source">{imp.source?.toUpperCase()}</span>
+                        <span className={`status ${imp.status?.toLowerCase()}`}>{imp.status}</span>
+                      </div>
+                      {imp.fileName && <p className="filename">{imp.fileName}</p>}
+                      <div className="history-stats">
+                        <span className="success">{imp.processedRecords} imported</span>
+                        {imp.failedRecords > 0 && (
+                          <span className="error">{imp.failedRecords} failed</span>
+                        )}
+                      </div>
+                      <p className="history-date">
+                        {new Date(imp.createdAt).toLocaleString()}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+              <Pagination total={total} offset={offset} limit={limit} onPageChange={setOffset} onLimitChange={(val) => { setLimit(val); setOffset(0); }} />
+            </>
           )}
         </div>
       )}
@@ -764,9 +991,9 @@ function TransactionImport() {
               ) : (
                 <>
                   <button className="btn-secondary" onClick={handleClose}>Close</button>
-                  <button className="btn-edit" onClick={handleEdit}>✏️ Edit</button>
+                  <button className="btn-edit" onClick={handleEdit}><Edit2 size={14} style={{marginRight:'4px',verticalAlign:'middle'}} /> Edit</button>
                   <button className="btn-delete" onClick={handleDelete} disabled={loading}>
-                    {loading ? 'Deleting...' : '🗑️ Delete'}
+                    {loading ? 'Deleting...' : <><Trash2 size={14} style={{marginRight:'4px',verticalAlign:'middle'}} /> Delete</>}
                   </button>
                 </>
               )}
@@ -818,12 +1045,22 @@ function TransactionImport() {
             <div className="modal-footer">
               <button className="btn-secondary" onClick={handleClose}>Close</button>
               <button className="btn-delete" onClick={handleDelete} disabled={loading}>
-                🗑️ Delete
+                <Trash2 size={14} style={{marginRight:'4px',verticalAlign:'middle'}} /> Delete
               </button>
             </div>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText="Delete"
+        variant="danger"
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog({ open: false, title: '', message: '', onConfirm: null })}
+      />
     </div>
   );
 }

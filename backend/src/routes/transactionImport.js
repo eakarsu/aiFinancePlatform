@@ -1,6 +1,34 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
+const { paginatedQuery, bulkDelete, bulkUpdate, handleExport } = require('../utils/queryHelpers');
+
+// OpenRouter AI helper
+async function callOpenRouter(prompt, systemPrompt = '') {
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5',
+      messages: [
+        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: 2500,
+      temperature: 0.2
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`OpenRouter API error: ${await response.text()}`);
+  }
+
+  const data = await response.json();
+  return data.choices[0].message.content;
+}
 
 // CSV parsing helper
 function parseCSV(csvContent) {
@@ -230,20 +258,52 @@ router.post('/csv', authenticateToken, async (req, res) => {
   }
 });
 
-// Get import history
+// Get import history (paginated, searchable)
 router.get('/history', authenticateToken, async (req, res) => {
   try {
     const prisma = req.app.get('prisma');
-
-    const imports = await prisma.transactionImport.findMany({
-      where: { userId: req.user.id },
-      orderBy: { createdAt: 'desc' },
-      take: 20
+    const { search } = req.query;
+    const result = await paginatedQuery(prisma, 'transactionImport', {
+      baseWhere: { userId: req.user.id },
+      search,
+      searchFields: ['source', 'fileName', 'status'],
+      query: req.query
     });
-
-    res.json(imports);
+    res.json(result);
   } catch (error) {
     res.status(500).json({ error: 'Failed to get import history' });
+  }
+});
+
+// Bulk delete transaction imports
+router.post('/history/bulk-delete', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    const result = await bulkDelete(prisma, 'transactionImport', req.user.id, req.body.ids);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Bulk delete failed' });
+  }
+});
+
+// Bulk update transaction imports
+router.patch('/history/bulk-update', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    const result = await bulkUpdate(prisma, 'transactionImport', req.user.id, req.body.ids, req.body.data);
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: 'Bulk update failed' });
+  }
+});
+
+// Export transaction imports
+router.get('/history/export', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    await handleExport(res, prisma, 'transactionImport', req.user.id, req.query, 'Transaction Imports', ['source', 'fileName', 'status', 'totalRecords', 'processedRecords', 'failedRecords', 'createdAt']);
+  } catch (error) {
+    res.status(500).json({ error: 'Export failed' });
   }
 });
 
@@ -413,6 +473,104 @@ router.delete('/plaid/:connectionId', authenticateToken, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to disconnect' });
+  }
+});
+
+// AI-powered transaction analysis
+router.post('/analyze', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+
+    if (!process.env.OPENROUTER_API_KEY) {
+      return res.status(400).json({ error: 'AI analysis requires OPENROUTER_API_KEY' });
+    }
+
+    // Get recent transactions
+    const transactions = await prisma.transaction.findMany({
+      where: { userId: req.user.id },
+      orderBy: { createdAt: 'desc' },
+      take: 100
+    });
+
+    if (transactions.length === 0) {
+      return res.status(400).json({ error: 'No transactions to analyze. Import some transactions first.' });
+    }
+
+    // Summarize transactions for AI
+    const totalSpent = transactions.filter(t => t.type === 'PURCHASE').reduce((s, t) => s + t.amount, 0);
+    const totalDeposited = transactions.filter(t => t.type === 'DEPOSIT').reduce((s, t) => s + t.amount, 0);
+    const categories = {};
+    const merchants = {};
+    transactions.forEach(t => {
+      if (t.category) categories[t.category] = (categories[t.category] || 0) + t.amount;
+      if (t.merchant) merchants[t.merchant] = (merchants[t.merchant] || 0) + t.amount;
+    });
+
+    const topCategories = Object.entries(categories).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const topMerchants = Object.entries(merchants).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+    // Sample of individual transactions for pattern detection
+    const txSample = transactions.slice(0, 30).map(t => ({
+      type: t.type, amount: t.amount, merchant: t.merchant, category: t.category,
+      date: t.createdAt?.toISOString?.()?.split('T')[0]
+    }));
+
+    const prompt = `Analyze these financial transactions and provide comprehensive insights.
+
+Summary:
+- Total Transactions: ${transactions.length}
+- Total Spending: $${totalSpent.toFixed(2)}
+- Total Deposits: $${totalDeposited.toFixed(2)}
+- Net Cash Flow: $${(totalDeposited - totalSpent).toFixed(2)}
+
+Top Categories by Spend:
+${topCategories.map(([cat, amt]) => `  ${cat}: $${amt.toFixed(2)}`).join('\n')}
+
+Top Merchants by Spend:
+${topMerchants.map(([m, amt]) => `  ${m}: $${amt.toFixed(2)}`).join('\n')}
+
+Sample Transactions:
+${JSON.stringify(txSample, null, 2)}
+
+Respond in JSON:
+{
+  "summary": "2-3 sentence overall spending analysis",
+  "healthScore": 75,
+  "monthlyBurnRate": 0,
+  "spendingPatterns": [
+    { "pattern": "pattern name", "description": "explanation", "type": "good|warning|concern" }
+  ],
+  "categoryInsights": [
+    { "category": "name", "assessment": "over_spending|normal|under_spending", "suggestion": "advice" }
+  ],
+  "anomalies": [
+    { "description": "unusual transaction or pattern", "severity": "high|medium|low" }
+  ],
+  "savingsOpportunities": [
+    { "title": "opportunity", "potentialSavings": 50, "description": "how to save" }
+  ],
+  "budgetRecommendation": {
+    "suggestedMonthlyBudget": 0,
+    "breakdown": [{"category": "name", "suggested": 0, "current": 0}]
+  }
+}
+
+Provide 3-5 spending patterns, 3-5 category insights, 2-3 anomalies, and 3-4 savings opportunities.`;
+
+    const aiResponse = await callOpenRouter(prompt, 'You are an expert financial analyst specializing in personal spending analysis and budgeting. Analyze transaction data to find patterns, anomalies, and savings opportunities. Always respond in valid JSON.');
+    const analysis = JSON.parse(aiResponse.replace(/```json\n?|```\n?/g, '').trim());
+
+    res.json({
+      analysis,
+      transactionCount: transactions.length,
+      totalSpent,
+      totalDeposited,
+      topCategories: topCategories.map(([cat, amt]) => ({ category: cat, amount: amt })),
+      topMerchants: topMerchants.map(([m, amt]) => ({ merchant: m, amount: amt }))
+    });
+  } catch (error) {
+    console.error('Transaction analysis error:', error);
+    res.status(500).json({ error: 'Failed to analyze transactions' });
   }
 });
 

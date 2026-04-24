@@ -5,7 +5,11 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   AreaChart, Area
 } from 'recharts';
-import { getPortfolios, getPortfolioRecommendation, rebalancePortfolio, createPortfolio, getRiskProfile, saveRiskProfile } from '../services/api';
+import { Plus, AlertTriangle, XCircle, Edit2, Trash2, Wallet } from 'lucide-react';
+import { getPortfolios, getPortfolioRecommendation, rebalancePortfolio, createPortfolio, getRiskProfile, saveRiskProfile, exportPortfolios, downloadExport } from '../services/api';
+import ConfirmDialog from '../components/ConfirmDialog';
+import LoadingSkeleton from '../components/LoadingSkeleton';
+import ExportButton from '../components/ExportButton';
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
 
@@ -22,6 +26,9 @@ function PortfolioDashboard() {
   const [hasRiskProfile, setHasRiskProfile] = useState(false);
   const [selectedHolding, setSelectedHolding] = useState(null);
   const [selectedAllocation, setSelectedAllocation] = useState(null);
+
+  // Confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, variant: 'danger', confirmText: 'Confirm' });
 
   useEffect(() => {
     loadPortfolios();
@@ -64,9 +71,11 @@ function PortfolioDashboard() {
   const loadPortfolios = async () => {
     try {
       const response = await getPortfolios();
-      setPortfolios(response.data);
-      if (response.data.length > 0) {
-        setSelectedPortfolio(response.data[0]);
+      const result = response.data;
+      const items = result.data || result;
+      setPortfolios(items);
+      if (items.length > 0) {
+        setSelectedPortfolio(items[0]);
       }
     } catch (error) {
       console.error('Failed to load portfolios:', error);
@@ -120,6 +129,24 @@ function PortfolioDashboard() {
     }
   };
 
+  const handleSellHolding = () => {
+    setConfirmDialog({
+      open: true,
+      title: 'Sell Holding',
+      message: `Are you sure you want to sell your ${selectedHolding?.symbol} holding?`,
+      variant: 'warning',
+      confirmText: 'Sell',
+      onConfirm: () => {
+        alert('Sell feature coming soon!');
+        setConfirmDialog({ open: false, title: '', message: '', onConfirm: null, variant: 'danger', confirmText: 'Confirm' });
+      }
+    });
+  };
+
+  const handleExport = (format) => {
+    downloadExport(exportPortfolios, format, 'portfolio-dashboard');
+  };
+
   // Prepare chart data
   const getAllocationData = () => {
     if (recommendation?.allocation) {
@@ -164,22 +191,33 @@ function PortfolioDashboard() {
   };
 
   if (loading && portfolios.length === 0) {
-    return <div className="loading">Loading portfolios...</div>;
+    return (
+      <div className="portfolio-dashboard">
+        <div className="dashboard-header">
+          <h1>Portfolio Dashboard</h1>
+        </div>
+        <LoadingSkeleton variant="card" count={4} />
+        <LoadingSkeleton variant="detail-panel" count={1} />
+      </div>
+    );
   }
 
   return (
     <div className="portfolio-dashboard">
       <div className="dashboard-header">
-        <h1>Portfolio Dashboard</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <h1 style={{ margin: 0 }}>Portfolio Dashboard</h1>
+          <ExportButton onExport={handleExport} />
+        </div>
         <button className="btn-primary" onClick={() => setShowCreateModal(true)}>
-          + New Portfolio
+          <Plus size={16} style={{marginRight:'4px',verticalAlign:'middle'}} /> New Portfolio
         </button>
       </div>
 
       {/* Risk Profile Warning */}
       {!hasRiskProfile && (
         <div className="warning-banner">
-          <span className="warning-icon">⚠️</span>
+          <span className="warning-icon"><AlertTriangle size={24} color="#e65100" /></span>
           <div className="warning-content">
             <strong>Complete Your Risk Profile First</strong>
             <p>To get personalized portfolio recommendations, please complete the risk assessment or use quick setup.</p>
@@ -202,7 +240,7 @@ function PortfolioDashboard() {
       {/* Error Display */}
       {error && (
         <div className="error-banner">
-          <span className="error-icon">❌</span>
+          <span className="error-icon"><XCircle size={20} /></span>
           <span>{error}</span>
           {error.includes('risk profile') && (
             <Link to="/risk-assessment" className="btn-link">Complete Risk Assessment</Link>
@@ -443,6 +481,84 @@ function PortfolioDashboard() {
               <h4>Why This Portfolio?</h4>
               <p>{recommendation.reasoning}</p>
             </div>
+
+            {/* Market Outlook */}
+            {recommendation.marketOutlook && (
+              <div className="ai-section" style={{marginTop:'16px', padding:'16px', background:'#f0f7ff', borderRadius:'8px', borderLeft:'4px solid #1976d2'}}>
+                <h4 style={{margin:'0 0 8px', color:'#1976d2'}}>Market Outlook</h4>
+                <p style={{margin:0}}>{recommendation.marketOutlook}</p>
+              </div>
+            )}
+
+            {/* Risk Analysis */}
+            {recommendation.riskAnalysis && (
+              <div className="ai-section" style={{marginTop:'16px', padding:'16px', background:'#fff8e1', borderRadius:'8px', borderLeft:'4px solid #f57c00'}}>
+                <h4 style={{margin:'0 0 12px', color:'#f57c00'}}>Risk Analysis</h4>
+                <p><strong>Max Drawdown:</strong> {recommendation.riskAnalysis.maxDrawdown}</p>
+                {recommendation.riskAnalysis.riskFactors?.length > 0 && (
+                  <>
+                    <p style={{margin:'8px 0 4px', fontWeight:600}}>Risk Factors:</p>
+                    <ul style={{margin:'0 0 8px', paddingLeft:'20px'}}>
+                      {recommendation.riskAnalysis.riskFactors.map((f, i) => <li key={i}>{f}</li>)}
+                    </ul>
+                  </>
+                )}
+                {recommendation.riskAnalysis.mitigations?.length > 0 && (
+                  <>
+                    <p style={{margin:'8px 0 4px', fontWeight:600}}>How We Mitigate:</p>
+                    <ul style={{margin:0, paddingLeft:'20px'}}>
+                      {recommendation.riskAnalysis.mitigations.map((m, i) => <li key={i}>{m}</li>)}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Growth Projections */}
+            {recommendation.growthProjections && (
+              <div className="ai-section" style={{marginTop:'16px', padding:'16px', background:'#e8f5e9', borderRadius:'8px', borderLeft:'4px solid #388e3c'}}>
+                <h4 style={{margin:'0 0 12px', color:'#388e3c'}}>Growth Projections</h4>
+                <div style={{display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(180px, 1fr))', gap:'12px'}}>
+                  {Object.entries(recommendation.growthProjections).map(([period, vals]) => (
+                    <div key={period} style={{background:'white', padding:'12px', borderRadius:'6px', textAlign:'center'}}>
+                      <div style={{fontWeight:700, color:'#388e3c', marginBottom:'6px'}}>{period.replace('year', 'Year ')}</div>
+                      <div style={{fontSize:'13px', color:'#666'}}>Conservative: <strong>${vals.conservative?.toLocaleString()}</strong></div>
+                      <div style={{fontSize:'15px', color:'#2e7d32', fontWeight:700}}>Expected: ${vals.expected?.toLocaleString()}</div>
+                      <div style={{fontSize:'13px', color:'#666'}}>Optimistic: <strong>${vals.optimistic?.toLocaleString()}</strong></div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Monthly Contribution */}
+            {recommendation.monthlyContribution && (
+              <div className="ai-section" style={{marginTop:'16px', padding:'16px', background:'#f3e5f5', borderRadius:'8px', borderLeft:'4px solid #7b1fa2'}}>
+                <h4 style={{margin:'0 0 8px', color:'#7b1fa2'}}>Recommended Monthly Contribution</h4>
+                <p style={{fontSize:'20px', fontWeight:700, margin:'0 0 8px'}}>${recommendation.monthlyContribution.recommended?.toLocaleString()}/month</p>
+                <p style={{margin:0, color:'#555'}}>{recommendation.monthlyContribution.impact}</p>
+              </div>
+            )}
+
+            {/* Tax Strategy */}
+            {recommendation.taxStrategy && (
+              <div className="ai-section" style={{marginTop:'16px', padding:'16px', background:'#e3f2fd', borderRadius:'8px', borderLeft:'4px solid #0288d1'}}>
+                <h4 style={{margin:'0 0 8px', color:'#0288d1'}}>Tax Strategy</h4>
+                <p style={{margin:0}}>{recommendation.taxStrategy}</p>
+              </div>
+            )}
+
+            {/* Next Steps */}
+            {recommendation.nextSteps?.length > 0 && (
+              <div className="ai-section" style={{marginTop:'16px', padding:'16px', background:'#fce4ec', borderRadius:'8px', borderLeft:'4px solid #c62828'}}>
+                <h4 style={{margin:'0 0 12px', color:'#c62828'}}>Next Steps</h4>
+                <ol style={{margin:0, paddingLeft:'20px'}}>
+                  {recommendation.nextSteps.map((step, i) => (
+                    <li key={i} style={{marginBottom:'6px'}}>{step}</li>
+                  ))}
+                </ol>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -568,12 +684,8 @@ function PortfolioDashboard() {
             </div>
             <div className="modal-footer">
               <button className="btn-secondary" onClick={() => setSelectedHolding(null)}>Close</button>
-              <button className="btn-edit" onClick={() => alert('Edit holding feature coming soon!')}>✏️ Edit</button>
-              <button className="btn-delete" onClick={() => {
-                if (window.confirm('Are you sure you want to sell this holding?')) {
-                  alert('Sell feature coming soon!');
-                }
-              }}>🗑️ Sell</button>
+              <button className="btn-edit" onClick={() => alert('Edit holding feature coming soon!')}><Edit2 size={14} style={{marginRight:'4px',verticalAlign:'middle'}} /> Edit</button>
+              <button className="btn-delete" onClick={handleSellHolding}><Trash2 size={14} style={{marginRight:'4px',verticalAlign:'middle'}} /> Sell</button>
             </div>
           </div>
         </div>
@@ -609,11 +721,22 @@ function PortfolioDashboard() {
             </div>
             <div className="modal-footer">
               <button className="btn-secondary" onClick={() => setSelectedAllocation(null)}>Close</button>
-              <button className="btn-primary" onClick={() => alert('Buy this ETF feature coming soon!')}>💰 Buy</button>
+              <button className="btn-primary" onClick={() => alert('Buy this ETF feature coming soon!')}><Wallet size={14} style={{marginRight:'4px',verticalAlign:'middle'}} /> Buy</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText={confirmDialog.confirmText}
+        variant={confirmDialog.variant}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog({ open: false, title: '', message: '', onConfirm: null, variant: 'danger', confirmText: 'Confirm' })}
+      />
     </div>
   );
 }

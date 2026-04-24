@@ -1,6 +1,23 @@
 import React, { useState, useEffect } from 'react';
+import { Shield, AlertTriangle, CheckCircle, Eye, BarChart3, Search, Edit2, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import * as api from '../services/api';
+import { bulkDeleteTransactions, exportTransactions, downloadExport } from '../services/api';
+import SearchBar from '../components/SearchBar';
+import Pagination from '../components/Pagination';
+import BulkActions from '../components/BulkActions';
+import ExportButton from '../components/ExportButton';
+import ConfirmDialog from '../components/ConfirmDialog';
+import LoadingSkeleton from '../components/LoadingSkeleton';
+import EmptyState from '../components/EmptyState';
+import SortControls from '../components/SortControls';
+
+const SORT_COLUMNS = [
+  { field: 'createdAt', label: 'Date' },
+  { field: 'amount', label: 'Amount' },
+  { field: 'merchant', label: 'Merchant' },
+  { field: 'fraudScore', label: 'Risk' }
+];
 
 function FraudDetection() {
   const navigate = useNavigate();
@@ -14,6 +31,18 @@ function FraudDetection() {
   const [transactionDetail, setTransactionDetail] = useState(null);
   const [batchResult, setBatchResult] = useState(null);
 
+  // Search, sort, pagination state
+  const [search, setSearch] = useState('');
+  const [sortBy, setSortBy] = useState('createdAt');
+  const [sortOrder, setSortOrder] = useState('desc');
+  const [offset, setOffset] = useState(0);
+  const [limit, setLimit] = useState(25);
+  const [total, setTotal] = useState(0);
+
+  // Bulk selection & confirm dialog
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null });
+
   const [newTransaction, setNewTransaction] = useState({
     amount: '',
     merchantName: '',
@@ -24,20 +53,25 @@ function FraudDetection() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [search, sortBy, sortOrder, offset, limit]);
 
   const loadData = async () => {
     try {
+      setLoading(true);
       const [transRes, alertRes, statsRes] = await Promise.all([
-        api.getTransactions(50),
+        api.getTransactions({ search, sortBy, sortOrder, offset, limit }),
         api.getFraudAlerts(),
         api.getFraudStats()
       ]);
-      setTransactions(transRes.data);
+      const result = transRes.data;
+      setTransactions(result.data || result);
+      setTotal(result.total || (result.data || result).length);
       setAlerts(alertRes.data);
       setStats(statsRes.data);
     } catch (error) {
       console.error('Failed to load data:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -45,17 +79,27 @@ function FraudDetection() {
     e.preventDefault();
     setLoading(true);
     try {
-      const response = await api.monitorTransaction({
+      // Step 1: Add the transaction
+      const addResponse = await api.addTransaction({
         ...newTransaction,
-        amount: parseFloat(newTransaction.amount)
+        amount: parseFloat(newTransaction.amount),
+        merchant: newTransaction.merchantName,
+        category: newTransaction.merchantCategory
       });
-      setTransactions([{ ...response.data, ...newTransaction, amount: parseFloat(newTransaction.amount) }, ...transactions]);
-      setNewTransaction({ amount: '', merchantName: '', merchantCategory: '', location: '', description: '' });
-      loadData();
+      const transactionId = addResponse.data.id;
 
-      if (response.data.riskLevel !== 'LOW') {
-        alert(`Transaction flagged! Risk: ${response.data.riskLevel}\nFlags: ${response.data.flags.join(', ')}`);
+      setNewTransaction({ amount: '', merchantName: '', merchantCategory: '', location: '', description: '' });
+
+      // Step 2: Run AI fraud analysis on the new transaction
+      try {
+        const analysisResponse = await api.analyzeTransaction(transactionId);
+        setAnalysisResult(analysisResponse.data);
+        setSelectedTransaction(transactionId);
+      } catch (aiErr) {
+        console.error('AI analysis failed:', aiErr);
       }
+
+      loadData();
     } catch (error) {
       alert('Failed to add transaction');
     } finally {
@@ -91,6 +135,42 @@ function FraudDetection() {
     }
   };
 
+  const handleDeleteTransaction = async (id) => {
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Transaction',
+      message: 'Are you sure you want to delete this transaction?',
+      onConfirm: async () => {
+        setConfirmDialog({ open: false, title: '', message: '', onConfirm: null });
+        try {
+          await api.deleteTransaction(id);
+          setTransactionDetail(null);
+          loadData();
+        } catch (error) {
+          alert('Failed to delete transaction');
+        }
+      }
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    setConfirmDialog({
+      open: true,
+      title: 'Delete Selected Transactions',
+      message: `Are you sure you want to delete ${selectedIds.length} transaction(s)? This action cannot be undone.`,
+      onConfirm: async () => {
+        setConfirmDialog({ open: false, title: '', message: '', onConfirm: null });
+        try {
+          await bulkDeleteTransactions(selectedIds);
+          setSelectedIds([]);
+          loadData();
+        } catch (error) {
+          console.error('Bulk delete failed:', error);
+        }
+      }
+    });
+  };
+
   const getRiskColor = (score) => {
     if (score >= 70) return '#F44336';
     if (score >= 40) return '#FF9800';
@@ -101,6 +181,34 @@ function FraudDetection() {
     if (score >= 70) return 'HIGH';
     if (score >= 40) return 'MEDIUM';
     return 'LOW';
+  };
+
+  const toggleSelectTransaction = (id) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === transactions.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(transactions.map(t => t.id));
+    }
+  };
+
+  const handleSort = (field, order) => {
+    setSortBy(field);
+    setSortOrder(order);
+    setOffset(0);
+  };
+
+  const handleSearch = (val) => {
+    setSearch(val);
+    setOffset(0);
+    setSelectedIds([]);
+  };
+
+  const handleExport = (format) => {
+    downloadExport(exportTransactions, format, 'transactions');
   };
 
   return (
@@ -165,57 +273,92 @@ function FraudDetection() {
             </button>
           </div>
 
-          <div className="transactions-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Amount</th>
-                  <th>Merchant</th>
-                  <th>Category</th>
-                  <th>Location</th>
-                  <th>Risk Score</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {transactions.map((tx) => (
-                  <tr
-                    key={tx.id}
-                    className={`clickable-row ${tx.fraudScore >= 50 ? 'flagged' : ''}`}
-                    onClick={() => setTransactionDetail(tx)}
-                  >
-                    <td>{new Date(tx.createdAt).toLocaleDateString()}</td>
-                    <td>${tx.amount?.toLocaleString()}</td>
-                    <td>{tx.merchantName || tx.merchant || '-'}</td>
-                    <td>{tx.merchantCategory || tx.category || '-'}</td>
-                    <td>{tx.location || '-'}</td>
-                    <td>
-                      {tx.fraudScore !== null ? (
-                        <span
-                          className="risk-badge"
-                          style={{ backgroundColor: getRiskColor(tx.fraudScore) }}
-                        >
-                          {tx.fraudScore} ({getRiskLabel(tx.fraudScore)})
-                        </span>
-                      ) : (
-                        <span className="risk-badge unanalyzed">Not analyzed</span>
-                      )}
-                    </td>
-                    <td>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); analyzeTransaction(tx.id); }}
-                        className="btn-small"
-                        disabled={loading && selectedTransaction === tx.id}
-                      >
-                        {loading && selectedTransaction === tx.id ? 'Analyzing...' : 'Analyze'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="list-toolbar">
+            <SearchBar value={search} onChange={handleSearch} placeholder="Search transactions..." />
+            <SortControls columns={SORT_COLUMNS} sortBy={sortBy} sortOrder={sortOrder} onSort={handleSort} />
+            <ExportButton onExport={handleExport} />
           </div>
+          <BulkActions selectedCount={selectedIds.length} onDelete={handleBulkDelete} onClear={() => setSelectedIds([])} />
+
+          {loading && transactions.length === 0 ? (
+            <LoadingSkeleton variant="table-row" count={5} />
+          ) : transactions.length === 0 ? (
+            <EmptyState
+              title="No transactions yet"
+              description="Add transactions to start fraud detection."
+              actionLabel="Add Transaction"
+              onAction={() => setActiveTab('add')}
+            />
+          ) : (
+            <>
+              <div className="transactions-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.length === transactions.length && transactions.length > 0}
+                          onChange={toggleSelectAll}
+                        />
+                      </th>
+                      <th>Date</th>
+                      <th>Amount</th>
+                      <th>Merchant</th>
+                      <th>Category</th>
+                      <th>Location</th>
+                      <th>Risk Score</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {transactions.map((tx) => (
+                      <tr
+                        key={tx.id}
+                        className={`clickable-row ${tx.fraudScore >= 50 ? 'flagged' : ''}`}
+                        onClick={() => setTransactionDetail(tx)}
+                      >
+                        <td onClick={e => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(tx.id)}
+                            onChange={() => toggleSelectTransaction(tx.id)}
+                          />
+                        </td>
+                        <td>{new Date(tx.createdAt).toLocaleDateString()}</td>
+                        <td>${tx.amount?.toLocaleString()}</td>
+                        <td>{tx.merchantName || tx.merchant || '-'}</td>
+                        <td>{tx.merchantCategory || tx.category || '-'}</td>
+                        <td>{tx.location || '-'}</td>
+                        <td>
+                          {tx.fraudScore !== null ? (
+                            <span
+                              className="risk-badge"
+                              style={{ backgroundColor: getRiskColor(tx.fraudScore) }}
+                            >
+                              {tx.fraudScore} ({getRiskLabel(tx.fraudScore)})
+                            </span>
+                          ) : (
+                            <span className="risk-badge unanalyzed">Not analyzed</span>
+                          )}
+                        </td>
+                        <td>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); analyzeTransaction(tx.id); }}
+                            className="btn-small"
+                            disabled={loading && selectedTransaction === tx.id}
+                          >
+                            {loading && selectedTransaction === tx.id ? 'Analyzing...' : 'Analyze'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <Pagination total={total} offset={offset} limit={limit} onPageChange={setOffset} onLimitChange={(val) => { setLimit(val); setOffset(0); }} />
+            </>
+          )}
         </div>
       )}
 
@@ -443,22 +586,12 @@ function FraudDetection() {
             </div>
             <div className="modal-footer">
               <button className="btn-secondary" onClick={() => setTransactionDetail(null)}>Close</button>
-              <button className="btn-edit" onClick={() => navigate('/import')}>✏️ Edit</button>
+              <button className="btn-edit" onClick={() => navigate('/import')}><Edit2 size={14} style={{marginRight:'4px',verticalAlign:'middle'}} /> Edit</button>
               <button
                 className="btn-delete"
-                onClick={async () => {
-                  if (window.confirm('Are you sure you want to delete this transaction?')) {
-                    try {
-                      await api.deleteTransaction(transactionDetail.id);
-                      setTransactionDetail(null);
-                      loadData();
-                    } catch (error) {
-                      alert('Failed to delete transaction');
-                    }
-                  }
-                }}
+                onClick={() => handleDeleteTransaction(transactionDetail.id)}
               >
-                🗑️ Delete
+                <Trash2 size={14} style={{marginRight:'4px',verticalAlign:'middle'}} /> Delete
               </button>
             </div>
           </div>
@@ -471,9 +604,9 @@ function FraudDetection() {
           <div className="modal batch-result-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header batch-header">
               <div className="batch-icon">
-                {batchResult.overallRiskLevel === 'CRITICAL' ? '🚨' :
-                 batchResult.overallRiskLevel === 'HIGH' ? '⚠️' :
-                 batchResult.overallRiskLevel === 'MEDIUM' ? '📊' : '✅'}
+                {batchResult.overallRiskLevel === 'CRITICAL' ? <AlertTriangle size={24} color="#9C27B0" /> :
+                 batchResult.overallRiskLevel === 'HIGH' ? <AlertTriangle size={24} color="#f44336" /> :
+                 batchResult.overallRiskLevel === 'MEDIUM' ? <BarChart3 size={24} color="#FF9800" /> : <CheckCircle size={24} color="#4CAF50" />}
               </div>
               <div>
                 <h2>Batch Analysis Complete</h2>
@@ -502,7 +635,7 @@ function FraudDetection() {
               {/* Pattern Alerts */}
               {batchResult.patternAlerts && batchResult.patternAlerts.length > 0 && (
                 <div className="batch-alerts-section">
-                  <h4>🔍 Pattern Alerts Detected</h4>
+                  <h4><Search size={16} style={{marginRight:'6px',verticalAlign:'middle'}} /> Pattern Alerts Detected</h4>
                   <ul className="batch-alerts-list">
                     {batchResult.patternAlerts.map((alert, index) => (
                       <li key={index} className="batch-alert-item">
@@ -517,7 +650,7 @@ function FraudDetection() {
               {/* Summary */}
               {batchResult.summary && (
                 <div className="batch-summary">
-                  <h4>📋 Analysis Summary</h4>
+                  <h4><Shield size={16} style={{marginRight:'6px',verticalAlign:'middle'}} /> Analysis Summary</h4>
                   <p>{batchResult.summary}</p>
                 </div>
               )}
@@ -525,7 +658,7 @@ function FraudDetection() {
               {/* Individual Results */}
               {batchResult.batchAnalysis && batchResult.batchAnalysis.length > 0 && (
                 <div className="batch-details">
-                  <h4>📊 Transaction Risk Breakdown</h4>
+                  <h4><BarChart3 size={16} style={{marginRight:'6px',verticalAlign:'middle'}} /> Transaction Risk Breakdown</h4>
                   <div className="batch-breakdown">
                     {batchResult.batchAnalysis.slice(0, 5).map((item, index) => (
                       <div key={index} className={`breakdown-item risk-${item.riskLevel?.toLowerCase()}`}>
@@ -552,6 +685,16 @@ function FraudDetection() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        confirmText="Delete"
+        variant="danger"
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog({ open: false, title: '', message: '', onConfirm: null })}
+      />
     </div>
   );
 }

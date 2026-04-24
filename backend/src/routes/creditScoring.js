@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const { calculateCreditScore } = require('../utils/creditScoringEngine');
+const { paginatedQuery, bulkDelete, handleExport, buildSearchWhere, parsePagination, parseSort } = require('../utils/queryHelpers');
 
 // OpenRouter AI helper with logging
 async function callOpenRouter(prompt, systemPrompt = '') {
@@ -122,6 +123,92 @@ router.post('/history', authenticateToken, async (req, res) => {
   }
 });
 
+// Get Credit Histories (paginated, searchable)
+router.get('/history', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    const creditProfile = await prisma.creditProfile.findUnique({
+      where: { userId: req.user.id }
+    });
+    if (!creditProfile) {
+      return res.json({ data: [], total: 0, offset: 0, limit: 50 });
+    }
+
+    const { search } = req.query;
+    const searchFields = ['type', 'provider'];
+    const baseWhere = { creditProfileId: creditProfile.id };
+    const where = search
+      ? { ...baseWhere, OR: searchFields.map(f => ({ [f]: { contains: search, mode: 'insensitive' } })) }
+      : baseWhere;
+    const { limit, offset } = parsePagination(req.query);
+    const orderBy = parseSort(req.query);
+
+    const [data, total] = await Promise.all([
+      prisma.creditHistory.findMany({ where, orderBy, take: limit, skip: offset }),
+      prisma.creditHistory.count({ where })
+    ]);
+
+    res.json({ data, total, offset, limit });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to get credit histories' });
+  }
+});
+
+// Bulk delete credit histories
+router.post('/history/bulk-delete', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    const creditProfile = await prisma.creditProfile.findUnique({
+      where: { userId: req.user.id }
+    });
+    if (!creditProfile) {
+      return res.status(404).json({ error: 'No credit profile found' });
+    }
+    const { ids } = req.body;
+    if (!ids?.length) {
+      return res.status(400).json({ error: 'No IDs provided' });
+    }
+    const result = await prisma.creditHistory.deleteMany({
+      where: { id: { in: ids }, creditProfileId: creditProfile.id }
+    });
+    res.json({ deleted: result.count });
+  } catch (error) {
+    res.status(500).json({ error: 'Bulk delete failed' });
+  }
+});
+
+// Export credit histories
+router.get('/history/export', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    const creditProfile = await prisma.creditProfile.findUnique({
+      where: { userId: req.user.id }
+    });
+    if (!creditProfile) {
+      return res.json({ data: [], total: 0 });
+    }
+    const exportFields = ['type', 'provider', 'monthlyAmount', 'onTimePayments', 'latePayments', 'missedPayments', 'startDate'];
+    const format = (req.query.format || 'json').toLowerCase();
+    const where = { creditProfileId: creditProfile.id };
+    const data = await prisma.creditHistory.findMany({ where, orderBy: { createdAt: 'desc' }, take: 500 });
+
+    if (format === 'csv') {
+      const { exportCSV } = require('../utils/queryHelpers');
+      const csv = exportCSV(data, exportFields);
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="Credit_History.csv"');
+      return res.send(csv);
+    }
+    if (format === 'pdf') {
+      const { exportPDF } = require('../utils/queryHelpers');
+      return exportPDF(res, data, 'Credit History', exportFields);
+    }
+    res.json({ data, total: data.length });
+  } catch (error) {
+    res.status(500).json({ error: 'Export failed' });
+  }
+});
+
 // Credit Score Calculation - Uses real algorithm + optional AI enhancement
 router.post('/calculate-score', authenticateToken, async (req, res) => {
   try {
@@ -147,7 +234,7 @@ router.post('/calculate-score', authenticateToken, async (req, res) => {
     // Use the real credit scoring engine
     const algorithmResult = calculateCreditScore(creditProfile, creditProfile.creditHistories);
 
-    let finalResult = {
+    const finalResult = {
       score: algorithmResult.score,
       confidence: algorithmResult.confidence,
       riskLevel: algorithmResult.riskLevel,
@@ -157,47 +244,6 @@ router.post('/calculate-score', authenticateToken, async (req, res) => {
       components: algorithmResult.components,
       method: 'algorithm'
     };
-
-    // Enhance with AI analysis via OpenRouter
-    if (useAI && process.env.OPENROUTER_API_KEY) {
-      console.log('Calling OpenRouter for AI-enhanced credit scoring...');
-      try {
-        const prompt = `You are an AI credit scoring assistant. A user has been assigned a credit score of ${algorithmResult.score} (${algorithmResult.riskLevel} risk) based on their alternative credit data.
-
-ALGORITHM SCORE COMPONENTS:
-${JSON.stringify(algorithmResult.components, null, 2)}
-
-FACTORS IDENTIFIED:
-Positive: ${algorithmResult.factors.positive.join(', ') || 'None'}
-Negative: ${algorithmResult.factors.negative.join(', ') || 'None'}
-
-USER PROFILE:
-- Annual Income: $${creditProfile.annualIncome || 'Unknown'}
-- Employment: ${creditProfile.employmentStatus || 'Unknown'} (${creditProfile.employmentYears || 0} years)
-- Bank Account Age: ${creditProfile.bankAccountAge || 0} months
-- Average Balance: $${creditProfile.averageBalance || 0}
-- Overdrafts: ${creditProfile.overdraftCount || 0}
-
-Provide additional insights and personalized recommendations in JSON:
-{
-  "aiInsights": ["insight1", "insight2"],
-  "personalizedRecommendations": ["rec1", "rec2", "rec3"],
-  "improvementPotential": "X points in Y months",
-  "confidenceAdjustment": 0
-}`;
-
-        const aiResponse = await callOpenRouter(prompt, 'You are a helpful credit advisor. Respond only in valid JSON.');
-        let jsonStr = aiResponse.match(/\{[\s\S]*\}/)?.[0] || '{}';
-        const aiEnhancement = JSON.parse(jsonStr);
-
-        finalResult.aiInsights = aiEnhancement.aiInsights;
-        finalResult.personalizedRecommendations = aiEnhancement.personalizedRecommendations;
-        finalResult.improvementPotential = aiEnhancement.improvementPotential;
-        finalResult.method = 'algorithm+ai';
-      } catch (aiError) {
-        console.log('AI enhancement failed, using algorithm only:', aiError.message);
-      }
-    }
 
     // Update credit profile with score
     await prisma.creditProfile.update({
@@ -242,6 +288,69 @@ Provide additional insights and personalized recommendations in JSON:
     console.error('Credit score calculation error:', error);
     console.error('Error stack:', error.stack);
     res.status(500).json({ error: 'Failed to calculate credit score', details: error.message });
+  }
+});
+
+// AI-powered credit analysis (on-demand, triggered by button click)
+router.post('/ai-analyze', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+
+    if (!process.env.OPENROUTER_API_KEY) {
+      return res.status(400).json({ error: 'AI analysis requires OPENROUTER_API_KEY' });
+    }
+
+    const creditProfile = await prisma.creditProfile.findUnique({
+      where: { userId: req.user.id },
+      include: { creditHistories: true }
+    });
+
+    if (!creditProfile || !creditProfile.aiCreditScore) {
+      return res.status(400).json({ error: 'Please calculate your credit score first' });
+    }
+
+    const algorithmResult = calculateCreditScore(creditProfile, creditProfile.creditHistories);
+
+    const prompt = `You are an AI credit scoring assistant. A user has been assigned a credit score of ${algorithmResult.score} (${algorithmResult.riskLevel} risk) based on their alternative credit data.
+
+ALGORITHM SCORE COMPONENTS:
+${JSON.stringify(algorithmResult.components, null, 2)}
+
+FACTORS IDENTIFIED:
+Positive: ${algorithmResult.factors.positive.join(', ') || 'None'}
+Negative: ${algorithmResult.factors.negative.join(', ') || 'None'}
+
+USER PROFILE:
+- Annual Income: $${creditProfile.annualIncome || 'Unknown'}
+- Employment: ${creditProfile.employmentStatus || 'Unknown'} (${creditProfile.employmentYears || 0} years)
+- Bank Account Age: ${creditProfile.bankAccountAge || 0} months
+- Average Balance: $${creditProfile.averageBalance || 0}
+- Overdrafts: ${creditProfile.overdraftCount || 0}
+
+PAYMENT HISTORIES:
+${creditProfile.creditHistories.map(h => `- ${h.provider} (${h.type}): ${h.onTimePayments} on-time, ${h.latePayments} late, ${h.missedPayments} missed`).join('\n') || 'None'}
+
+Provide detailed AI analysis in JSON:
+{
+  "aiInsights": ["insight1", "insight2", "insight3"],
+  "personalizedRecommendations": ["rec1", "rec2", "rec3", "rec4"],
+  "improvementPotential": "X points in Y months",
+  "scoreBreakdown": "2-3 sentence explanation of how the score was derived",
+  "actionPlan": [
+    { "priority": "high|medium|low", "action": "specific step", "impact": "expected improvement" }
+  ]
+}
+
+Provide 3-4 insights, 4-5 recommendations, and 3-4 action plan items.`;
+
+    const aiResponse = await callOpenRouter(prompt, 'You are an expert credit advisor specializing in alternative credit scoring for thin-file consumers. Provide actionable, personalized advice. Respond only in valid JSON.');
+    let jsonStr = aiResponse.match(/\{[\s\S]*\}/)?.[0] || '{}';
+    const analysis = JSON.parse(jsonStr);
+
+    res.json(analysis);
+  } catch (error) {
+    console.error('AI credit analysis error:', error);
+    res.status(500).json({ error: 'Failed to generate AI analysis' });
   }
 });
 

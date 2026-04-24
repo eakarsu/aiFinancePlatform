@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { getNotificationCount } from '../services/api';
+import {
+  Bell,
+  Settings,
+  Menu,
+  LogOut,
+} from 'lucide-react';
 
-function Navbar() {
+function Navbar({ onHamburgerClick }) {
   const { user, logout } = useAuth();
-  const location = useLocation();
   const [unreadCount, setUnreadCount] = useState(0);
-
-  const isActive = (path) => location.pathname === path;
 
   useEffect(() => {
     if (user) {
       loadUnreadCount();
-      // Refresh count every 30 seconds
       const interval = setInterval(loadUnreadCount, 30000);
       return () => clearInterval(interval);
     }
@@ -30,50 +32,33 @@ function Navbar() {
 
   return (
     <nav className="navbar">
-      <div className="navbar-brand">
-        <Link to="/">AI Finance Platform</Link>
+      <div className="navbar-left">
+        {user && onHamburgerClick && (
+          <button className="hamburger-btn" onClick={onHamburgerClick}>
+            <Menu size={22} />
+          </button>
+        )}
+        <div className="navbar-brand">
+          <Link to="/">AI Finance Platform</Link>
+        </div>
       </div>
 
       {user ? (
-        <>
-          <div className="navbar-menu">
-            <Link to="/dashboard" className={isActive('/dashboard') ? 'active' : ''}>
-              Dashboard
-            </Link>
-            <Link to="/portfolio-dashboard" className={isActive('/portfolio-dashboard') ? 'active' : ''}>
-              Portfolio
-            </Link>
-            <Link to="/robo-advisor" className={isActive('/robo-advisor') ? 'active' : ''}>
-              Advisor
-            </Link>
-            <Link to="/fraud-detection" className={isActive('/fraud-detection') ? 'active' : ''}>
-              Fraud
-            </Link>
-            <Link to="/credit-scoring" className={isActive('/credit-scoring') ? 'active' : ''}>
-              Credit
-            </Link>
-            <Link to="/risk-assessment" className={isActive('/risk-assessment') ? 'active' : ''}>
-              Risk
-            </Link>
-            <Link to="/import" className={isActive('/import') ? 'active' : ''}>
-              Import
-            </Link>
-          </div>
-
-          <div className="navbar-user">
-            <Link to="/alerts" className="alerts-icon">
-              🔔
-              {unreadCount > 0 && (
-                <span className="alert-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
-              )}
-            </Link>
-            <Link to="/settings" className="settings-icon" title="Settings">
-              ⚙️
-            </Link>
-            <span className="user-name">{user.firstName || user.email}</span>
-            <button onClick={logout} className="btn-logout">Logout</button>
-          </div>
-        </>
+        <div className="navbar-user">
+          <Link to="/alerts" className="alerts-icon">
+            <Bell size={20} />
+            {unreadCount > 0 && (
+              <span className="alert-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+            )}
+          </Link>
+          <Link to="/settings" className="settings-icon" title="Settings">
+            <Settings size={20} />
+          </Link>
+          <span className="user-name">{user.firstName || user.email}</span>
+          <button onClick={logout} className="btn-logout">
+            <LogOut size={16} /> Logout
+          </button>
+        </div>
       ) : (
         <div className="navbar-auth">
           <Link to="/login" className="btn-login">Login</Link>
