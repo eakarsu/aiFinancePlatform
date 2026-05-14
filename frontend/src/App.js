@@ -23,7 +23,16 @@ import RetirementPlanner from './pages/RetirementPlanner';
 import BudgetCoach from './pages/BudgetCoach';
 import GoalTracker from './pages/GoalTracker';
 import BillNegotiator from './pages/BillNegotiator';
+import AssetAllocation from './pages/AssetAllocation';
+import RebalancingSuggest from './pages/RebalancingSuggest';
+import BudgetOptimize from './pages/BudgetOptimize';
+import StockRecommend from './pages/StockRecommend';
+import InsuranceRecommend from './pages/InsuranceRecommend';
+import RetirementProject from './pages/RetirementProject';
+import AdvancedTools from './pages/AdvancedTools';
 import './App.css';
+
+import Batch03Features from './pages/Batch03Features';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -99,6 +108,7 @@ function AppLayout() {
       <main className="main-content">
         <ErrorBoundary>
           <Routes>
+          <Route path="/batch03" element={<Batch03Features />} />
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
@@ -235,6 +245,62 @@ function AppLayout() {
               element={
                 <PrivateRoute>
                   <BillNegotiator />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/asset-allocation"
+              element={
+                <PrivateRoute>
+                  <AssetAllocation />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/rebalancing-suggest"
+              element={
+                <PrivateRoute>
+                  <RebalancingSuggest />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/budget-optimize"
+              element={
+                <PrivateRoute>
+                  <BudgetOptimize />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/stock-recommend"
+              element={
+                <PrivateRoute>
+                  <StockRecommend />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/insurance-recommend"
+              element={
+                <PrivateRoute>
+                  <InsuranceRecommend />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/retirement-project"
+              element={
+                <PrivateRoute>
+                  <RetirementProject />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/advanced-tools"
+              element={
+                <PrivateRoute>
+                  <AdvancedTools />
                 </PrivateRoute>
               }
             />

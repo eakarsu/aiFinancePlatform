@@ -3,76 +3,8 @@ const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
 const investmentEngine = require('../utils/investmentEngine');
 const { paginatedQuery, bulkDelete, bulkUpdate, handleExport } = require('../utils/queryHelpers');
-
-// Repair truncated JSON by closing open brackets/braces
-function repairJSON(str) {
-  try {
-    JSON.parse(str);
-    return str;
-  } catch (e) {
-    let fixed = str.replace(/,\s*$/, '');
-    const opens = { '{': 0, '[': 0 };
-    const closes = { '}': '{', ']': '[' };
-    let inString = false;
-    let escape = false;
-    for (const ch of fixed) {
-      if (escape) { escape = false; continue; }
-      if (ch === '\\') { escape = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue;
-      if (ch === '{' || ch === '[') opens[ch]++;
-      if (ch === '}' || ch === ']') opens[closes[ch]]--;
-    }
-    if (inString) fixed += '"';
-    for (let i = 0; i < opens['[']; i++) fixed += ']';
-    for (let i = 0; i < opens['{']; i++) fixed += '}';
-    fixed = fixed.replace(/,\s*([}\]])/g, '$1');
-    return fixed;
-  }
-}
-
-// OpenRouter AI helper
-async function callOpenRouter(prompt, systemPrompt = '') {
-  console.log('=== OpenRouter API Call ===');
-  console.log('Model:', process.env.OPENROUTER_MODEL || 'anthropic/claude-3-haiku');
-  console.log('API Key (first 20 chars):', process.env.OPENROUTER_API_KEY?.substring(0, 20));
-  console.log('Prompt length:', prompt.length);
-
-  const startTime = Date.now();
-
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5',
-      messages: [
-        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 8000,
-      temperature: 0.3
-    })
-  });
-
-  const elapsed = Date.now() - startTime;
-  console.log('Response status:', response.status);
-  console.log('Response time:', elapsed, 'ms');
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('OpenRouter error response:', errorText);
-    throw new Error(`OpenRouter API error: ${errorText}`);
-  }
-
-  const data = await response.json();
-  console.log('OpenRouter success, response length:', data.choices[0].message.content.length);
-  console.log('=== End OpenRouter Call ===');
-
-  return data.choices[0].message.content;
-}
+const { callOpenRouter } = require('../services/openrouter');
+const { parseAIJson } = require('../utils/parseAIJson');
 
 // Create/Update Risk Profile
 router.post('/risk-profile', authenticateToken, async (req, res) => {
@@ -187,25 +119,17 @@ RULES: Percentages must add up to 100. Use real ETF symbols. Amounts = percentag
     let modelUsed = 'openrouter';
 
     try {
-      console.log('Calling OpenRouter API...');
-      console.log('API Key exists:', !!process.env.OPENROUTER_API_KEY);
-      console.log('Model:', process.env.OPENROUTER_MODEL);
-
       const aiResponse = await callOpenRouter(prompt, 'You are an expert financial advisor. Respond only with valid JSON.');
-      console.log('OpenRouter response received, length:', aiResponse?.length);
+      const parsed = parseAIJson(aiResponse);
 
-      const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
-
-      if (jsonMatch) {
-        recommendation = JSON.parse(repairJSON(jsonMatch[0]));
+      if (parsed) {
+        recommendation = parsed;
         recommendation.suitability = {
           riskTolerance: riskProfile.riskTolerance,
           investmentGoal: riskProfile.investmentGoal,
           timeHorizon: riskProfile.timeHorizon + ' years'
         };
-        console.log('OpenRouter recommendation parsed successfully');
       } else {
-        console.log('No JSON found in response:', aiResponse?.substring(0, 200));
         throw new Error('Invalid AI response format');
       }
     } catch (aiError) {

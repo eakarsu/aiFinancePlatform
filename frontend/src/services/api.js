@@ -243,4 +243,23 @@ export const downloadExport = async (exportFn, format, filename) => {
   }
 };
 
+// AI endpoints (audit batch_03 follow-ups)
+export const aiAssetAllocation = (data) => api.post('/ai/asset-allocation', data);
+export const aiRebalancingSuggest = (data) => api.post('/ai/rebalancing-suggest', data);
+export const aiBudgetOptimize = (data) => api.post('/ai/budget-optimize', data);
+export const aiStockRecommend = (data) => api.post('/ai/stock-recommend', data);
+export const aiInsuranceRecommend = (data) => api.post('/ai/insurance-recommend', data);
+export const aiRetirementProject = (data) => api.post('/ai/retirement-project', data);
+
+// AI endpoints (apply pass 5 backlog)
+export const aiFraudDetect = (data) => api.post('/ai/fraud-detect', data);
+export const aiBillNegotiate = (data) => api.post('/ai/bill-negotiate', data);
+export const aiAgenticAdvice = (data) => api.post('/ai/agentic-advice', data);
+export const aiBehavioralNudge = (data) => api.post('/ai/behavioral-nudge', data);
+export const aiEsppRsuOptimize = (data) => api.post('/ai/espp-rsu-optimize', data);
+export const aiYodleeAggregate = (data) => api.post('/ai/yodlee-aggregate', data);
+export const aiMxAggregate = (data) => api.post('/ai/mx-aggregate', data);
+export const aiEsgScreen = (data) => api.post('/ai/esg-screen', data);
+export const aiDefiYield = (data) => api.post('/ai/defi-yield', data);
+
 export default api;
