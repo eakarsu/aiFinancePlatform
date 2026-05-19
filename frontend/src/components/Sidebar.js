@@ -23,7 +23,8 @@ import {
   Settings,
   ChevronsLeft,
   ChevronsRight,
-  X
+  X,
+  BarChart3
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
@@ -67,6 +68,12 @@ const NAV_SECTIONS = [
       { to: '/insurance-recommend', label: 'AI Insurance', Icon: ShieldCheck },
       { to: '/retirement-project', label: 'AI Retirement', Icon: Clock },
       { to: '/advanced-tools', label: 'Advanced AI Tools', Icon: Sparkles },
+    ],
+  },
+  {
+    title: 'Finance Views',
+    items: [
+      { to: '/custom-views', label: 'Finance Views', Icon: BarChart3 },
     ],
   },
   {

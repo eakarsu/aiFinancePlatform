@@ -108,6 +108,9 @@ app.use('/api/behavioral-coaching', require('./routes/behavioralCoaching'));
 app.use('/api/fractional-shares', require('./routes/fractionalShares'));
 app.use('/api/espp-rsu', require('./routes/esppRsuOptim'));
 
+// Custom Views (Finance Views feature) — mount BEFORE any 404 handler
+app.use('/api/custom-views', require('./routes/customViews'));
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({

@@ -33,6 +33,7 @@ import AdvancedTools from './pages/AdvancedTools';
 import './App.css';
 
 import Batch03Features from './pages/Batch03Features';
+import CustomViewsPage from './pages/CustomViewsPage';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -109,6 +110,14 @@ function AppLayout() {
         <ErrorBoundary>
           <Routes>
           <Route path="/batch03" element={<Batch03Features />} />
+            <Route
+              path="/custom-views"
+              element={
+                <PrivateRoute>
+                  <CustomViewsPage />
+                </PrivateRoute>
+              }
+            />
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
