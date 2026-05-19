@@ -25,10 +25,15 @@ function Dashboard() {
       const [notifRes, fraudRes, portfolioRes] = await Promise.all([
         getNotificationCount().catch(() => ({ data: { unread: 0 } })),
         getFraudStats().catch(() => ({ data: { totalTransactions: 0, totalAlerts: 0 } })),
-        getPortfolios().catch(() => ({ data: [] }))
+        getPortfolios().catch(() => ({ data: { data: [] } }))
       ]);
 
-      const totalValue = portfolioRes.data.reduce((sum, p) => sum + (p.totalValue || 0), 0);
+      // getPortfolios uses paginatedQuery which returns { data: [], total, offset, limit }.
+      // Older code did portfolioRes.data.reduce(...) which threw on the wrapper object.
+      const portfolios = Array.isArray(portfolioRes.data)
+        ? portfolioRes.data
+        : (portfolioRes.data?.data || []);
+      const totalValue = portfolios.reduce((sum, p) => sum + (p.totalValue || 0), 0);
 
       setStats({
         notifications: notifRes.data.unread || 0,

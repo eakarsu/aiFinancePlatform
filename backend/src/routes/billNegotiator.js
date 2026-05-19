@@ -1,61 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
+const { callOpenRouter } = require('../services/openrouter');
+const { parseAIJson } = require('../utils/parseAIJson');
 const { paginatedQuery, bulkDelete, bulkUpdate, handleExport } = require('../utils/queryHelpers');
 
-// Repair truncated JSON by closing open brackets/braces
-function repairJSON(str) {
-  try {
-    JSON.parse(str);
-    return str;
-  } catch (e) {
-    let fixed = str.replace(/,\s*$/, '');
-    const opens = { '{': 0, '[': 0 };
-    const closes = { '}': '{', ']': '[' };
-    let inString = false;
-    let escape = false;
-    for (const ch of fixed) {
-      if (escape) { escape = false; continue; }
-      if (ch === '\\') { escape = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue;
-      if (ch === '{' || ch === '[') opens[ch]++;
-      if (ch === '}' || ch === ']') opens[closes[ch]]--;
-    }
-    if (inString) fixed += '"';
-    for (let i = 0; i < opens['[']; i++) fixed += ']';
-    for (let i = 0; i < opens['{']; i++) fixed += '}';
-    fixed = fixed.replace(/,\s*([}\]])/g, '$1');
-    return fixed;
-  }
-}
 
-// OpenRouter AI helper
-async function callOpenRouter(prompt, systemPrompt = '') {
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5',
-      messages: [
-        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 3000,
-      temperature: 0.3
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`OpenRouter API error: ${await response.text()}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0].message.content;
-}
 
 // Get all bills
 router.get('/', authenticateToken, async (req, res) => {
@@ -287,8 +237,8 @@ Provide a CONCISE negotiation strategy in this JSON format (keep all text brief,
     let strategy = null;
     if (jsonMatch) {
       try {
-        const repaired = repairJSON(jsonMatch[0]);
-        strategy = JSON.parse(repaired);
+        const _aiParsed = parseAIJson(jsonMatch[0]);
+        strategy = _aiParsed || {};
       } catch (parseErr) {
         console.error('Strategy JSON parse error, using raw text fallback');
         strategy = {
@@ -403,8 +353,8 @@ Provide detailed analysis in this JSON format (give thorough advice, up to 5 ite
     let analysis = null;
     if (jsonMatch) {
       try {
-        const repaired = repairJSON(jsonMatch[0]);
-        analysis = JSON.parse(repaired);
+        const _aiParsed = parseAIJson(jsonMatch[0]);
+        analysis = _aiParsed || {};
       } catch (parseErr) {
         console.error('Bills analysis JSON parse error, using fallback');
         analysis = {

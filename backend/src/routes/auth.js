@@ -6,9 +6,10 @@ const crypto = require('crypto');
 const speakeasy = require('speakeasy');
 const QRCode = require('qrcode');
 const { authenticateToken } = require('../middleware/auth');
+const { authRateLimiter } = require('../middleware/rateLimiter');
 
 // Register
-router.post('/register', async (req, res) => {
+router.post('/register', authRateLimiter, async (req, res) => {
   try {
     const prisma = req.app.get('prisma');
     const { email, password, firstName, lastName, phone } = req.body;
@@ -40,7 +41,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/login', authRateLimiter, async (req, res) => {
   try {
     const prisma = req.app.get('prisma');
     const { email, password, totpCode } = req.body;
@@ -86,9 +87,13 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Demo Login - bypasses password check for demo account only
+// Demo Login - GATED: only available when DEMO_LOGIN_ENABLED=true (and never in production unless explicitly opted in)
 router.post('/demo-login', async (req, res) => {
   try {
+    if (process.env.DEMO_LOGIN_ENABLED !== 'true' || process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ error: 'Not available' });
+    }
+
     const prisma = req.app.get('prisma');
 
     // Only works for demo account
@@ -124,7 +129,7 @@ router.post('/logout', authenticateToken, async (req, res) => {
 });
 
 // Forgot Password - generates reset token
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', authRateLimiter, async (req, res) => {
   try {
     const prisma = req.app.get('prisma');
     const { email } = req.body;
@@ -164,7 +169,7 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // Reset Password - validates token and resets password
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', authRateLimiter, async (req, res) => {
   try {
     const prisma = req.app.get('prisma');
     const { token, newPassword } = req.body;
@@ -265,6 +270,83 @@ router.post('/2fa/verify', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('2FA verify error:', error);
     res.status(500).json({ error: 'Failed to verify 2FA' });
+  }
+});
+
+// 2FA Verify-Setup alias (for clients using /2fa/verify-setup endpoint name)
+router.post('/2fa/verify-setup', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    const { code } = req.body;
+
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!user?.twoFactorSecret) {
+      return res.status(400).json({ error: '2FA setup required first' });
+    }
+
+    const verified = speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: 'base32',
+      token: code
+    });
+
+    if (!verified) {
+      return res.status(400).json({ error: 'Invalid verification code' });
+    }
+
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: { twoFactorEnabled: true }
+    });
+
+    res.json({ success: true, message: '2FA enabled successfully' });
+  } catch (error) {
+    console.error('2FA verify-setup error:', error);
+    res.status(500).json({ error: 'Failed to verify 2FA setup' });
+  }
+});
+
+// 2FA Validate — standalone endpoint to verify TOTP code during login (step-2 flow)
+// Client sends email + TOTP code after password has already been verified (requires2FA=true response)
+router.post('/2fa/validate', async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    const { email, totpCode } = req.body;
+
+    if (!email || !totpCode) {
+      return res.status(400).json({ error: 'email and totpCode are required' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || !user.twoFactorEnabled || !user.twoFactorSecret) {
+      return res.status(400).json({ error: 'Invalid request or 2FA not enabled' });
+    }
+
+    const verified = speakeasy.totp.verify({
+      secret: user.twoFactorSecret,
+      encoding: 'base32',
+      token: totpCode
+    });
+
+    if (!verified) {
+      return res.status(401).json({ error: 'Invalid 2FA code' });
+    }
+
+    // Issue JWT token after successful 2FA validation
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, role: user.role, twoFactorEnabled: user.twoFactorEnabled },
+      token
+    });
+  } catch (error) {
+    console.error('2FA validate error:', error);
+    res.status(500).json({ error: 'Failed to validate 2FA code' });
   }
 });
 

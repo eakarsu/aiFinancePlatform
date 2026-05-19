@@ -1,46 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
+const { callOpenRouter } = require('../services/openrouter');
+const { parseAIJson } = require('../utils/parseAIJson');
 const { calculateCreditScore } = require('../utils/creditScoringEngine');
 const { paginatedQuery, bulkDelete, handleExport, buildSearchWhere, parsePagination, parseSort } = require('../utils/queryHelpers');
 
-// OpenRouter AI helper with logging
-async function callOpenRouter(prompt, systemPrompt = '') {
-  console.log('=== Credit Scoring OpenRouter API Call ===');
-  console.log('Model:', process.env.OPENROUTER_MODEL || 'anthropic/claude-3-haiku');
-  const startTime = Date.now();
-
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-3-haiku',
-      messages: [
-        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 2000,
-      temperature: 0.2
-    })
-  });
-
-  const elapsed = Date.now() - startTime;
-  console.log('Response status:', response.status);
-  console.log('Response time:', elapsed, 'ms');
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error('OpenRouter error:', errorText);
-    throw new Error(`OpenRouter API error: ${errorText}`);
-  }
-
-  const data = await response.json();
-  console.log('=== OpenRouter call successful ===');
-  return data.choices[0].message.content;
-}
 
 // Create/Update Credit Profile
 router.post('/profile', authenticateToken, async (req, res) => {

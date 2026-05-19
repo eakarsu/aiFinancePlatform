@@ -1,66 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
+const { callOpenRouter } = require('../services/openrouter');
+const { parseAIJson } = require('../utils/parseAIJson');
 const { paginatedQuery, bulkDelete, bulkUpdate, handleExport } = require('../utils/queryHelpers');
 
-// Repair truncated JSON by closing open brackets/braces
-function repairJSON(str) {
-  try {
-    JSON.parse(str);
-    return str;
-  } catch (e) {
-    // Remove trailing comma before closing
-    let fixed = str.replace(/,\s*$/, '');
-    // Count open/close brackets
-    const opens = { '{': 0, '[': 0 };
-    const closes = { '}': '{', ']': '[' };
-    let inString = false;
-    let escape = false;
-    for (const ch of fixed) {
-      if (escape) { escape = false; continue; }
-      if (ch === '\\') { escape = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue;
-      if (ch === '{' || ch === '[') opens[ch]++;
-      if (ch === '}' || ch === ']') opens[closes[ch]]--;
-    }
-    // If we're inside a string, close it
-    if (inString) fixed += '"';
-    // Close any open arrays then objects
-    for (let i = 0; i < opens['[']; i++) fixed += ']';
-    for (let i = 0; i < opens['{']; i++) fixed += '}';
-    // Remove trailing comma before closing bracket
-    fixed = fixed.replace(/,\s*([}\]])/g, '$1');
-    return fixed;
-  }
-}
 
-// OpenRouter AI helper
-async function callOpenRouter(prompt, systemPrompt = '') {
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5',
-      messages: [
-        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 3000,
-      temperature: 0.3
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`OpenRouter API error: ${await response.text()}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0].message.content;
-}
 
 // Get all goals
 router.get('/', authenticateToken, async (req, res) => {
@@ -290,8 +235,8 @@ Provide goal analysis in this JSON format:
 
     let analysis = null;
     if (jsonMatch) {
-      const repaired = repairJSON(jsonMatch[0]);
-      analysis = JSON.parse(repaired);
+      const _aiParsed = parseAIJson(jsonMatch[0]);
+        analysis = _aiParsed || {};
 
       await prisma.financialGoal.update({
         where: { id: goal.id },
@@ -388,8 +333,8 @@ Provide portfolio analysis in this COMPACT JSON format (keep descriptions short,
 
     let analysis = null;
     if (jsonMatch) {
-      const repaired = repairJSON(jsonMatch[0]);
-      analysis = JSON.parse(repaired);
+      const _aiParsed = parseAIJson(jsonMatch[0]);
+        analysis = _aiParsed || {};
     }
 
     // Log the analysis

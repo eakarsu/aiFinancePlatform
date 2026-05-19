@@ -1,35 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { authenticateToken } = require('../middleware/auth');
+const { callOpenRouter } = require('../services/openrouter');
+const { parseAIJson } = require('../utils/parseAIJson');
 const alertsEngine = require('../utils/alertsEngine');
 const { paginatedQuery, handleExport } = require('../utils/queryHelpers');
 
-// OpenRouter AI helper
-async function callOpenRouter(prompt, systemPrompt = '') {
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: process.env.OPENROUTER_MODEL || 'anthropic/claude-haiku-4.5',
-      messages: [
-        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 2000,
-      temperature: 0.2
-    })
-  });
-
-  if (!response.ok) {
-    throw new Error(`OpenRouter API error: ${await response.text()}`);
-  }
-
-  const data = await response.json();
-  return data.choices[0].message.content;
-}
 
 // Get all notifications for user
 router.get('/', authenticateToken, async (req, res) => {

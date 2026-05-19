@@ -16,11 +16,15 @@ import {
   Wallet,
   Target,
   Receipt,
+  Sparkles,
+  RefreshCw,
+  Calculator,
   Bell,
   Settings,
   ChevronsLeft,
   ChevronsRight,
-  X
+  X,
+  BarChart3
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
@@ -57,6 +61,19 @@ const NAV_SECTIONS = [
       { to: '/budget-coach', label: 'Budget Coach', Icon: Wallet },
       { to: '/goal-tracker', label: 'Goal Tracker', Icon: Target },
       { to: '/bill-negotiator', label: 'Bill Negotiator', Icon: Receipt },
+      { to: '/asset-allocation', label: 'Asset Allocation', Icon: Sparkles },
+      { to: '/rebalancing-suggest', label: 'Rebalancing', Icon: RefreshCw },
+      { to: '/budget-optimize', label: 'Budget Optimize', Icon: Calculator },
+      { to: '/stock-recommend', label: 'AI Stock Picks', Icon: TrendingUp },
+      { to: '/insurance-recommend', label: 'AI Insurance', Icon: ShieldCheck },
+      { to: '/retirement-project', label: 'AI Retirement', Icon: Clock },
+      { to: '/advanced-tools', label: 'Advanced AI Tools', Icon: Sparkles },
+    ],
+  },
+  {
+    title: 'Finance Views',
+    items: [
+      { to: '/custom-views', label: 'Finance Views', Icon: BarChart3 },
     ],
   },
   {
