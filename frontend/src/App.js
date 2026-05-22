@@ -34,6 +34,24 @@ import './App.css';
 
 import Batch03Features from './pages/Batch03Features';
 import CustomViewsPage from './pages/CustomViewsPage';
+import CashBufferStress from './pages/CashBufferStress';
+
+import CodexCustomVizFeature from './pages/CodexCustomVizFeature';
+import CodexOperationsFeature from './pages/CodexOperationsFeature';
+
+// Core Banking pages
+import BankAccounts from './pages/bank/BankAccounts';
+import BankLedger from './pages/bank/BankLedger';
+import BankTransactions from './pages/bank/BankTransactions';
+import BankInterestAccrual from './pages/bank/BankInterestAccrual';
+import BankKyc from './pages/bank/BankKyc';
+import BankCardIssuance from './pages/bank/BankCardIssuance';
+import BankAch from './pages/bank/BankAch';
+import BankWire from './pages/bank/BankWire';
+import BankSwift from './pages/bank/BankSwift';
+import BankReconciliation from './pages/bank/BankReconciliation';
+import BankRegulatoryReporting from './pages/bank/BankRegulatoryReporting';
+import './pages/bank/bank.css';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -109,12 +127,23 @@ function AppLayout() {
       <main className="main-content">
         <ErrorBoundary>
           <Routes>
+        <Route path="/codex/custom-viz" element={<CodexCustomVizFeature />} />
+        <Route path="/codex/operations" element={<CodexOperationsFeature />} />
+
           <Route path="/batch03" element={<Batch03Features />} />
             <Route
               path="/custom-views"
               element={
                 <PrivateRoute>
                   <CustomViewsPage />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/cash-buffer-stress"
+              element={
+                <PrivateRoute>
+                  <CashBufferStress />
                 </PrivateRoute>
               }
             />
@@ -312,6 +341,52 @@ function AppLayout() {
                   <AdvancedTools />
                 </PrivateRoute>
               }
+            />
+
+            {/* ── Core Banking routes ── */}
+            <Route
+              path="/bank/accounts/*"
+              element={<PrivateRoute><BankAccounts /></PrivateRoute>}
+            />
+            <Route
+              path="/bank/ledger/*"
+              element={<PrivateRoute><BankLedger /></PrivateRoute>}
+            />
+            <Route
+              path="/bank/transactions/*"
+              element={<PrivateRoute><BankTransactions /></PrivateRoute>}
+            />
+            <Route
+              path="/bank/interestAccrual/*"
+              element={<PrivateRoute><BankInterestAccrual /></PrivateRoute>}
+            />
+            <Route
+              path="/bank/kyc/*"
+              element={<PrivateRoute><BankKyc /></PrivateRoute>}
+            />
+            <Route
+              path="/bank/cardIssuance/*"
+              element={<PrivateRoute><BankCardIssuance /></PrivateRoute>}
+            />
+            <Route
+              path="/bank/ach/*"
+              element={<PrivateRoute><BankAch /></PrivateRoute>}
+            />
+            <Route
+              path="/bank/wire/*"
+              element={<PrivateRoute><BankWire /></PrivateRoute>}
+            />
+            <Route
+              path="/bank/swift/*"
+              element={<PrivateRoute><BankSwift /></PrivateRoute>}
+            />
+            <Route
+              path="/bank/reconciliation/*"
+              element={<PrivateRoute><BankReconciliation /></PrivateRoute>}
+            />
+            <Route
+              path="/bank/regulatoryReporting/*"
+              element={<PrivateRoute><BankRegulatoryReporting /></PrivateRoute>}
             />
           </Routes>
         </ErrorBoundary>

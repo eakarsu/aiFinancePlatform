@@ -778,3 +778,269 @@ model Bill {
 
   @@map("bills")
 }
+
+// ============== BANKING MODELS ==============
+
+model BankAccount {
+  id                String    @id @default(uuid())
+  customerId        String
+  accountNumber     String    @unique
+  accountType       String    // Checking, Savings, CD, etc.
+  currency          String    @default("USD")
+  productCode       String?
+  branchCode        String?
+  overdraftLimit    Float     @default(0)
+  availableBalance  Float     @default(0)
+  ledgerBalance     Float     @default(0)
+  interestRate      Float     @default(0)
+  openedAt          DateTime?
+  closedAt          DateTime?
+  status            String    @default("Active")
+  aiResult          Json?
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("bank_accounts")
+}
+
+model GlEntry {
+  id            String    @id @default(uuid())
+  journalId     String
+  entryDate     DateTime?
+  accountId     String
+  debit         Float     @default(0)
+  credit        Float     @default(0)
+  description   String?
+  glCode        String?
+  reference     String?
+  postingStatus String    @default("Draft")
+  periodCode    String?
+  reversalOf    String?
+  status        String    @default("Active")
+  aiResult      Json?
+  deletedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("gl_entries")
+}
+
+model BankTransaction {
+  id              String    @id @default(uuid())
+  accountId       String
+  txType          String
+  amount          Float
+  currency        String    @default("USD")
+  direction       String    @default("Debit")
+  channel         String    @default("Online")
+  merchantName    String?
+  mccCode         String?
+  description     String?
+  referenceNumber String?
+  valueDate       DateTime?
+  feeAmount       Float     @default(0)
+  amlScore        Float     @default(0)
+  status          String    @default("Completed")
+  aiResult        Json?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("bank_transactions")
+}
+
+model InterestAccrual {
+  id                 String    @id @default(uuid())
+  accountId          String
+  accrualDate        DateTime?
+  principal          Float
+  rate               Float
+  dayCount           Int       @default(1)
+  accrualAmount      Float     @default(0)
+  rateType           String    @default("Fixed")
+  dayCountConvention String    @default("Actual365")
+  postingStatus      String    @default("Pending")
+  ytdAccrued         Float     @default(0)
+  status             String    @default("Active")
+  aiResult           Json?
+  deletedAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@map("interest_accruals")
+}
+
+model KycProfile {
+  id              String    @id @default(uuid())
+  customerId      String
+  idDocType       String?
+  idDocNumber     String?
+  idIssuedBy      String?
+  idExpiresAt     DateTime?
+  sourceOfFunds   String?
+  annualIncomeBand String?
+  kycStatus       String    @default("Pending")
+  riskTier        String    @default("Medium")
+  pepFlag         Boolean   @default(false)
+  sanctionsFlag   Boolean   @default(false)
+  onboardedAt     DateTime?
+  nextReviewDue   DateTime?
+  aiRiskScore     Float     @default(0)
+  status          String    @default("Active")
+  aiResult        Json?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("kyc_profiles")
+}
+
+model CardIssuance {
+  id               String    @id @default(uuid())
+  accountId        String
+  customerId       String
+  cardType         String
+  network          String    @default("Visa")
+  embossedName     String?
+  last4            String?
+  creditLimit      Float     @default(0)
+  availableCredit  Float     @default(0)
+  cardStatus       String    @default("PendingActivation")
+  issuedAt         DateTime?
+  expiryMonth      Int?
+  expiryYear       Int?
+  pinFailCount     Int       @default(0)
+  contactless      Boolean   @default(true)
+  virtualCard      Boolean   @default(false)
+  aiIssuanceRisk   Float     @default(0)
+  status           String    @default("Active")
+  aiResult         Json?
+  deletedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("card_issuances")
+}
+
+model AchBatch {
+  id                    String    @id @default(uuid())
+  secCode               String
+  direction             String    @default("Origination")
+  receiverName          String?
+  receiverRoutingAba    String
+  receiverAccountNumber String
+  receiverAccountType   String    @default("Checking")
+  amount                Float
+  transactionCode       String?
+  companyName           String?
+  companyId             String?
+  traceNumber           String?
+  batchId               String?
+  effectiveDate         String?
+  prenotification       Boolean   @default(false)
+  returnCode            String?
+  status                String    @default("Pending")
+  aiResult              Json?
+  deletedAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@map("ach_batches")
+}
+
+model WireTransfer {
+  id                   String    @id @default(uuid())
+  accountId            String
+  customerId           String?
+  direction            String    @default("Outgoing")
+  amount               Float
+  currency             String    @default("USD")
+  beneficiaryName      String
+  beneficiaryAccount   String
+  beneficiaryBank      String?
+  beneficiaryBankSwift String?
+  purposeOfPayment     String?
+  fedReference         String?
+  ofacScreeningResult  String    @default("Pending")
+  feeAmount            Float     @default(0)
+  valueDate            String?
+  status               String    @default("Pending")
+  aiResult             Json?
+  deletedAt            DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@map("wire_transfers")
+}
+
+model SwiftMessage {
+  id               String    @id @default(uuid())
+  messageType      String
+  sender           String?
+  receiver         String?
+  senderBic        String
+  receiverBic      String
+  transactionRef   String?
+  relatedRef       String?
+  currency         String?
+  amount           Float?
+  valueDate        String?
+  rawMt            String?
+  parsedFields     Json?
+  validationStatus String    @default("Pending")
+  validationErrors Json?
+  stpStatus        String    @default("Pending")
+  coverMethod      String?
+  aiQualityScore   Float?
+  status           String    @default("Active")
+  aiResult         Json?
+  deletedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("swift_messages")
+}
+
+model ReconciliationItem {
+  id               String    @id @default(uuid())
+  reconDate        String
+  reconType        String
+  accountId        String
+  glBalance        Float     @default(0)
+  statementBalance Float     @default(0)
+  difference       Float     @default(0)
+  unresolvedItems  Int       @default(0)
+  resolvedItems    Int       @default(0)
+  suspenseAmount   Float     @default(0)
+  status           String    @default("Open")
+  aiResult         Json?
+  deletedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@map("reconciliation_items")
+}
+
+model RegReport {
+  id                String    @id @default(uuid())
+  reportType        String
+  reportingPeriod   String
+  dueDate           DateTime?
+  subjectCustomerId String?
+  subjectAccountId  String?
+  reportingOfficer  String?
+  totalAmount       Float?
+  currencyType      String    @default("USD")
+  filedWith         String?
+  referenceNumber   String?
+  narrativeText     String?
+  aiDraftedNarrative String?
+  status            String    @default("Draft")
+  aiResult          Json?
+  deletedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("reg_reports")
+}

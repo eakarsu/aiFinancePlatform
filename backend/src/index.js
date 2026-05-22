@@ -65,6 +65,9 @@ app.use(express.json({ limit: '5mb' }));
 // Make prisma available to routes
 app.set('prisma', prisma);
 
+// Inject the Prisma singleton into banking helpers so they reuse one pool
+require('./utils/bankingHelpers').setPrisma(prisma);
+
 // AI rate limiter — 30 req / 15 min per IP on all /api/ai/* routes
 app.use('/api/ai', aiRateLimit);
 
@@ -111,6 +114,21 @@ app.use('/api/espp-rsu', require('./routes/esppRsuOptim'));
 // Custom Views (Finance Views feature) — mount BEFORE any 404 handler
 app.use('/api/custom-views', require('./routes/customViews'));
 
+// ── Core Banking Platform ────────────────────────────────────────────────────
+app.use('/api/bank/accounts',              require('./routes/bankFeat_accounts'));
+app.use('/api/bank/ledger',                require('./routes/bankFeat_ledger'));
+app.use('/api/bank/transactions',          require('./routes/bankFeat_transactions'));
+app.use('/api/bank/interest-accrual',      require('./routes/bankFeat_interestAccrual'));
+app.use('/api/bank/kyc',                   require('./routes/bankFeat_kyc'));
+app.use('/api/bank/cards',                 require('./routes/bankFeat_cardIssuance'));
+app.use('/api/bank/ach',                   require('./routes/bankFeat_ach'));
+app.use('/api/bank/wire',                  require('./routes/bankFeat_wire'));
+app.use('/api/bank/swift',                 require('./routes/bankFeat_swift'));
+app.use('/api/bank/reconciliation',        require('./routes/bankFeat_reconciliation'));
+app.use('/api/bank/regulatory-reporting',  require('./routes/bankFeat_regulatoryReporting'));
+app.use('/api/cash-buffer-stress', require('./routes/cashBufferStress'));
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({
@@ -132,9 +150,12 @@ app.get('/api/health', (req, res) => {
       'bill-negotiator',
       'plaid-bank-sync',
       'market-data',
-      'ai-tax-loss-harvest'
+      'ai-tax-loss-harvest',
+      'bank-accounts', 'bank-ledger', 'bank-transactions', 'bank-interest-accrual',
+      'bank-kyc', 'bank-cards', 'bank-ach', 'bank-wire', 'bank-swift',
+      'bank-reconciliation', 'bank-regulatory-reporting'
     ],
-    version: '3.2.0'
+    version: '4.0.0'
   });
 });
 

@@ -24,7 +24,18 @@ import {
   ChevronsLeft,
   ChevronsRight,
   X,
-  BarChart3
+  BarChart3,
+  Building2,
+  BookOpen,
+  ArrowLeftRight,
+  Percent,
+  UserCheck,
+  BadgeCheck,
+  Send,
+  Zap,
+  Globe,
+  Scale,
+  FileText
 } from 'lucide-react';
 
 const NAV_SECTIONS = [
@@ -59,6 +70,7 @@ const NAV_SECTIONS = [
       { to: '/insurance-optimizer', label: 'Insurance', Icon: ShieldCheck },
       { to: '/retirement-planner', label: 'Retirement', Icon: Clock },
       { to: '/budget-coach', label: 'Budget Coach', Icon: Wallet },
+      { to: '/cash-buffer-stress', label: 'Cash Buffer', Icon: Wallet },
       { to: '/goal-tracker', label: 'Goal Tracker', Icon: Target },
       { to: '/bill-negotiator', label: 'Bill Negotiator', Icon: Receipt },
       { to: '/asset-allocation', label: 'Asset Allocation', Icon: Sparkles },
@@ -77,6 +89,22 @@ const NAV_SECTIONS = [
     ],
   },
   {
+    title: 'Core Banking',
+    items: [
+      { to: '/bank/accounts', label: 'Accounts', Icon: Building2 },
+      { to: '/bank/ledger', label: 'Ledger', Icon: BookOpen },
+      { to: '/bank/transactions', label: 'Transactions', Icon: ArrowLeftRight },
+      { to: '/bank/interestAccrual', label: 'Interest Accrual', Icon: Percent },
+      { to: '/bank/kyc', label: 'KYC', Icon: UserCheck },
+      { to: '/bank/cardIssuance', label: 'Card Issuance', Icon: BadgeCheck },
+      { to: '/bank/ach', label: 'ACH', Icon: Send },
+      { to: '/bank/wire', label: 'Wire Transfers', Icon: Zap },
+      { to: '/bank/swift', label: 'SWIFT', Icon: Globe },
+      { to: '/bank/reconciliation', label: 'Reconciliation', Icon: Scale },
+      { to: '/bank/regulatoryReporting', label: 'Regulatory Reporting', Icon: FileText },
+    ],
+  },
+  {
     title: 'Account',
     items: [
       { to: '/alerts', label: 'Notifications', Icon: Bell },
@@ -88,7 +116,8 @@ const NAV_SECTIONS = [
 function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }) {
   const location = useLocation();
 
-  const isActive = (path) => location.pathname === path;
+  const isActive = (path) =>
+    location.pathname === path || location.pathname.startsWith(path + '/');
 
   const handleLinkClick = () => {
     if (mobileOpen) {
