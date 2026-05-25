@@ -36,6 +36,26 @@ export default function Batch03Features() {
   const [results, setResults] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const sampleRequests = [
+      {
+          "label": "Scenario",
+          "value": "Run Batch03 Features for a realistic customer case.\nContext: a team needs a practical recommendation based on incomplete operating data.\nGoal: identify the best action, key risks, missing information, and expected business impact.\nReturn: summary, prioritized action plan, assumptions, and follow-up questions."
+      },
+      {
+          "label": "Data sample",
+          "value": "Analyze this Batch03 Features data sample.\nInput records:\n- Record 1: urgent, customer impact high, owner unassigned\n- Record 2: medium priority, blocked by missing data\n- Record 3: recurring issue, automation opportunity\nReturn structured findings, anomalies, recommendations, and confidence."
+      },
+      {
+          "label": "Executive review",
+          "value": "Prepare an executive review for Batch03 Features.\nAudience: business owner, operations lead, and implementation team.\nInclude impact, risk, estimated effort, decision points, and a concise next-step plan."
+      }
+  ];
+
+  const applySampleRequest = (value) => {
+    setInput(value);
+    setError(null);
+  };
   const current = FEATURES.find(f => f.slug === active) || FEATURES[0];
 
   async function run() {
@@ -79,6 +99,19 @@ export default function Batch03Features() {
             <div style={{ color: '#475569', fontSize: 13 }}>{current.desc}</div>
             <div style={{ color: '#64748b', fontSize: 11, marginTop: 4 }}>POST <code>{current.endpoint}</code></div>
           </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+          {sampleRequests.map((sample) => (
+            <button
+              key={sample.label}
+              type="button"
+              onClick={() => applySampleRequest(sample.value)}
+              style={{ padding: '6px 10px', background: '#eef2ff', color: '#1e3a8a', border: '1px solid #c7d2fe', borderRadius: 6, cursor: 'pointer', fontSize: 12, fontWeight: 600 }}
+            >
+              {sample.label}
+            </button>
+          ))}
+        </div>
+
           <textarea value={input} onChange={e => setInput(e.target.value)}
             placeholder='Optional JSON input (e.g. {"query":"..."})'
             style={{ width: '100%', minHeight: 80, padding: 8, fontFamily: 'monospace', fontSize: 12, border: '1px solid #cbd5e1', borderRadius: 4 }} />
