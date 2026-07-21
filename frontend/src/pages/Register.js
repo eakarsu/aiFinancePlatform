@@ -138,11 +138,11 @@ function Register() {
                   id="reg-password"
                   type="password"
                   name="password"
-                  placeholder="Min 6 characters"
+                  placeholder="Min 12 characters"
                   value={formData.password}
                   onChange={handleChange}
                   required
-                  minLength={6}
+                  minLength={12}
                 />
               </div>
             </div>

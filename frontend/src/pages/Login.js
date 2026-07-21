@@ -1,12 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { login as apiLogin, demoLogin as apiDemoLogin, register as apiRegister, forgotPassword, resetPassword } from '../services/api';
+import { login as apiLogin, forgotPassword, resetPassword } from '../services/api';
 import { Mail, Lock, ArrowRight, Zap, Shield, TrendingUp, Eye, EyeOff, ArrowLeft, CheckCircle } from 'lucide-react';
-
-// Demo credentials
-const DEMO_EMAIL = 'demo@aifinance.com';
-const DEMO_PASSWORD = 'demo123456';
 
 function Login() {
   const [email, setEmail] = useState('');
@@ -46,46 +42,6 @@ function Login() {
       navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fillDemoCredentials = () => {
-    setEmail(DEMO_EMAIL);
-    setPassword(DEMO_PASSWORD);
-    setError('');
-    setMessage('Demo credentials filled. Click Login to continue.');
-  };
-
-  const quickDemoLogin = async () => {
-    setLoading(true);
-    setError('');
-    setMessage('');
-
-    try {
-      const response = await apiDemoLogin();
-      login(response.data.user, response.data.token);
-      navigate('/dashboard');
-    } catch (err) {
-      if (err.response?.status === 401) {
-        try {
-          await apiRegister({
-            email: DEMO_EMAIL,
-            password: DEMO_PASSWORD,
-            firstName: 'Demo',
-            lastName: 'User',
-            phone: '+1 555-0100'
-          });
-          const response = await apiDemoLogin();
-          login(response.data.user, response.data.token);
-          navigate('/dashboard');
-        } catch (regErr) {
-          setError('Demo login failed. Please try again.');
-        }
-      } else {
-        setError('Demo login failed. Please try again.');
-      }
     } finally {
       setLoading(false);
     }
@@ -254,7 +210,7 @@ function Login() {
                       <input
                         id="new-password"
                         type="password"
-                        placeholder="Enter new password (min 6 chars)"
+                        placeholder="Enter new password (min 12 chars)"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         required
@@ -370,25 +326,6 @@ function Login() {
                 <span>or try it out</span>
               </div>
 
-              <div className="login-demo-row">
-                <button
-                  type="button"
-                  onClick={quickDemoLogin}
-                  disabled={loading}
-                  className="login-demo-btn login-demo-btn--primary"
-                >
-                  <Zap size={16} />
-                  Quick Demo Login
-                </button>
-                <button
-                  type="button"
-                  onClick={fillDemoCredentials}
-                  disabled={loading}
-                  className="login-demo-btn login-demo-btn--secondary"
-                >
-                  Fill Demo Credentials
-                </button>
-              </div>
 
               <p className="login-footer-text">
                 Don't have an account? <Link to="/register">Create one</Link>

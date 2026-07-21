@@ -29,12 +29,44 @@ const retirementPlannerRoutes = require('./routes/retirementPlanner');
 const budgetCoachRoutes = require('./routes/budgetCoach');
 const goalTrackerRoutes = require('./routes/goalTracker');
 const billNegotiatorRoutes = require('./routes/billNegotiator');
+const { parseProviderContracts, missingCapabilities } = require('./services/providerContracts');
 
 const app = express();
 
 // Validate JWT_SECRET at boot rather than on first request
-if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 16) {
-  console.error('FATAL: JWT_SECRET environment variable must be set and at least 16 characters.');
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32) {
+  console.error('FATAL: JWT_SECRET environment variable must be set and at least 32 characters.');
+  process.exit(1);
+}
+if (!process.env.FINANCE_GATEWAY_SECRET || process.env.FINANCE_GATEWAY_SECRET.length < 32) {
+  console.error('FATAL: FINANCE_GATEWAY_SECRET must be set and at least 32 characters.');
+  process.exit(1);
+}
+if (!/^postgres(?:ql)?:\/\//.test(process.env.DATABASE_URL || '')) {
+  console.error('FATAL: DATABASE_URL must be an explicit PostgreSQL connection string.');
+  process.exit(1);
+}
+let allowedOrigins;
+try {
+  allowedOrigins = String(process.env.CLIENT_URL || '').split(',').filter(Boolean).map((value) => {
+    const url = new URL(value.trim());
+    if (!['http:', 'https:'].includes(url.protocol) || url.origin !== url.href.replace(/\/$/, '')) {
+      throw new Error('not an HTTP(S) origin');
+    }
+    return url.origin;
+  });
+  if (allowedOrigins.length === 0) throw new Error('no origins configured');
+} catch (_) {
+  console.error('FATAL: CLIENT_URL must contain explicit comma-separated HTTP(S) origins.');
+  process.exit(1);
+}
+let financeProviderContracts;
+try {
+  financeProviderContracts = parseProviderContracts(process.env.FINANCE_PROVIDER_CONTRACTS || '');
+  const missing = missingCapabilities(financeProviderContracts);
+  if (missing.length) throw new Error(`missing capabilities: ${missing.join(', ')}`);
+} catch (error) {
+  console.error('FATAL: FINANCE_PROVIDER_CONTRACTS is incomplete or invalid.', { reason: error.message });
   process.exit(1);
 }
 
@@ -47,15 +79,10 @@ const prisma = new PrismaClient({ adapter });
 app.use(helmet());
 
 // Env-based CORS allowlist (audit flagged wide-open `app.use(cors())`)
-const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:3000')
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
-
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true);
-    if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
     return cb(new Error(`CORS: origin ${origin} not allowed`));
   },
   credentials: true
@@ -64,6 +91,7 @@ app.use(express.json({ limit: '5mb' }));
 
 // Make prisma available to routes
 app.set('prisma', prisma);
+app.set('governedPool', pool);
 
 // Inject the Prisma singleton into banking helpers so they reuse one pool
 require('./utils/bankingHelpers').setPrisma(prisma);
@@ -109,6 +137,9 @@ app.use('/api/defi-portfolio', require('./routes/defiPortfolio'));
 app.use('/api/esg-screening', require('./routes/esgScreening'));
 app.use('/api/behavioral-coaching', require('./routes/behavioralCoaching'));
 app.use('/api/fractional-shares', require('./routes/fractionalShares'));
+app.use('/api/governed-trading', require('./routes/governedTrading').createGovernedTradingRouter({
+  providerContracts: financeProviderContracts,
+}));
 app.use('/api/espp-rsu', require('./routes/esppRsuOptim'));
 
 // Custom Views (Finance Views feature) — mount BEFORE any 404 handler
@@ -168,7 +199,12 @@ try {
   else app.use('/api', _batch03);
 } catch (_e) { /* batch03 gap routes optional */ }
 
-app.listen(PORT, () => {
-  console.log(`AI Finance Platform running on port ${PORT}`);
-  console.log('Modules: Robo-Advisor, Credit Scoring, Fraud Detection');
-});
+let server;
+if (require.main === module) {
+  server = app.listen(PORT, () => {
+    console.log(`AI Finance Platform running on port ${PORT}`);
+    console.log('Modules: Robo-Advisor, Credit Scoring, Fraud Detection, Governed Paper Trading');
+  });
+}
+
+module.exports = { app, pool, prisma, server };

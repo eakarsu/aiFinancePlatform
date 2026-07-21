@@ -1,1 +1,2 @@
-2d180c49-e4f7-4076-8096-8415d1abdb36
+[REDACTED]
+Historical credential-like content was removed. Revoke and rotate the original provider values.

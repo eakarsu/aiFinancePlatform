@@ -98,8 +98,8 @@ function Settings() {
       setMessage({ type: 'error', text: 'New passwords do not match' });
       return;
     }
-    if (passwords.newPassword.length < 6) {
-      setMessage({ type: 'error', text: 'Password must be at least 6 characters' });
+    if (passwords.newPassword.length < 12) {
+      setMessage({ type: 'error', text: 'Password must be at least 12 characters' });
       return;
     }
     setSaving(true);

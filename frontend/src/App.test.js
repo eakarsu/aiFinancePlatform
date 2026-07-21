@@ -1,8 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import App from './App';
 
-test('renders learn react link', () => {
+jest.mock('./services/api', () => ({
+  getMe: jest.fn(),
+}));
+
+test('unauthenticated visitors reach the sign-in screen without embedded demo credentials', async () => {
+  localStorage.clear();
   render(<App />);
-  const linkElement = screen.getByText(/learn react/i);
-  expect(linkElement).toBeInTheDocument();
+  expect(await screen.findByRole('heading', { name: /welcome back/i })).toBeInTheDocument();
+  expect(screen.getByLabelText(/email address/i)).toHaveValue('');
+  expect(screen.getByLabelText(/^password$/i)).toHaveValue('');
+  expect(screen.queryByText(/quick demo login/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/fill demo credentials/i)).not.toBeInTheDocument();
 });

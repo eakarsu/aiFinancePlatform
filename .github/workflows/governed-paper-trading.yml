@@ -1,0 +1,72 @@
+name: governed-paper-trading
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: governed-paper-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: finance_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d finance_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:test@127.0.0.1:5432/finance_test
+      JWT_SECRET: ci-jwt-secret-at-least-thirty-two-random-characters
+      FINANCE_GATEWAY_SECRET: ci-finance-secret-at-least-thirty-two-characters
+      CLIENT_URL: http://127.0.0.1:3000
+      RUN_DB_TESTS: "true"
+      FINANCE_PROVIDER_CONTRACTS: >-
+        [{"id":"ci-market","mode":"paper","contractRef":"agreement:ci-market","capabilities":["market-data"]},{"id":"ci-custody","mode":"paper","contractRef":"agreement:ci-custody","capabilities":["custody-snapshot","custody-reconciliation"]},{"id":"ci-broker","mode":"paper","contractRef":"agreement:ci-broker","capabilities":["paper-fill"]},{"id":"ci-actions","mode":"paper","contractRef":"agreement:ci-actions","capabilities":["corporate-action"]}]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      - run: npm ci
+        working-directory: frontend
+      - run: npm test
+        working-directory: backend
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: backend
+      - run: npx prisma migrate deploy
+        working-directory: backend
+      - run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f migrations/001_governed_paper_trading.sql
+      - run: npm run test:integration
+        working-directory: backend
+      - run: npx prisma validate
+        working-directory: backend
+      - run: npx prisma generate
+        working-directory: backend
+      - run: CI=true npm test -- --watchAll=false
+        working-directory: frontend
+      - run: npm audit --omit=dev --audit-level=critical
+        working-directory: frontend
+      - run: CI=false npm run build
+        working-directory: frontend
+      - run: bash -n start.sh
+      - run: ./start.sh check
+      - run: >-
+          ! grep -Eiq 'DROP (TABLE|DATABASE)|TRUNCATE|pkill|kill -9|npm install|db push|seed' start.sh migrations/001_governed_paper_trading.sql
