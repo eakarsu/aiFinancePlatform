@@ -15,6 +15,12 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 // Helper function to generate random date within range
+function requireDemoPassword() {
+  const password = process.env.DEMO_PASSWORD || process.env.SEED_DEMO_PASSWORD || process.env.DEMO_SEED_PASSWORD || '';
+  if (password.length < 12 || password.length > 1024) throw new Error('DEMO_PASSWORD must contain 12-1024 characters');
+  return password;
+}
+
 function randomDate(start, end) {
   return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
 }
@@ -86,7 +92,7 @@ async function main() {
     { first: 'Daniel', last: 'Clark', email: 'dclark@email.com' },
   ];
 
-  const hashedPassword = await bcrypt.hash('demo123456', 10);
+  const hashedPassword = await bcrypt.hash(requireDemoPassword(), 10);
 
   const users = await Promise.all(
     userNames.map((user, index) =>
@@ -1204,7 +1210,7 @@ async function main() {
   console.log(`   🎯 Financial Goals:      ${goalsData.length}`);
   console.log(`   📞 Bills:                ${billsData.length}`);
   console.log('═'.repeat(60));
-  console.log('\n🎉 Demo credentials: demo@aifinance.com / demo123456\n');
+  console.log('Demo login users provisioned from the local environment.');
 }
 
 main()
