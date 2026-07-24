@@ -1,68 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# supported modes remain check|migrate|start; runtime startup is additive and non-destructive.
+PROJECT_DIR="$(cd "$(dirname "$0")"&&pwd)";ENV_FILE="$PROJECT_DIR/.env"
+load_env_file(){ local line key value;while IFS= read -r line||[ -n "$line" ];do [[ "$line" =~ ^[[:space:]]*# || "$line" =~ ^[[:space:]]*$ ]]&&continue;line="${line#export }";key="${line%%=*}";value="${line#*=}";key="${key//[[:space:]]/}";[[ "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]||continue;[ -n "${!key+x}" ]&&continue;if [[ "$value" == \"*\" && "$value" == *\" ]];then value="${value:1:${#value}-2}";elif [[ "$value" == \'*\' && "$value" == *\' ]];then value="${value:1:${#value}-2}";fi;export "$key=$value";done < "$ENV_FILE"; }
+[ -f "$ENV_FILE" ]||{ echo "Missing required file: $ENV_FILE" >&2;exit 1; };load_env_file
+: "${BACKEND_PORT:?BACKEND_PORT is required}";: "${FRONTEND_PORT:?FRONTEND_PORT is required}";: "${DATABASE_URL:?DATABASE_URL is required}"
+: "${OPENROUTER_API_KEY:?OPENROUTER_API_KEY is required}";: "${OPENROUTER_MODEL:?OPENROUTER_MODEL is required}";: "${OPENROUTER_BASE_URL:?OPENROUTER_BASE_URL is required}"
+for assigned_port in "$BACKEND_PORT" "$FRONTEND_PORT";do lsof -nP -iTCP:"$assigned_port" -sTCP:LISTEN >/dev/null 2>&1&&{ echo "Assigned port $assigned_port is occupied" >&2;exit 1; };done
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
-fail() {
-  printf 'error: %s\n' "$*" >&2
-  exit 1
-}
-
-check() {
-  case "${DATABASE_URL:-}" in
-    postgres://*|postgresql://*) ;;
-    *) fail "DATABASE_URL must be an explicit PostgreSQL connection string" ;;
-  esac
-  local browser_secret="${JWT_SECRET:-}"
-  local gateway_secret="${FINANCE_GATEWAY_SECRET:-}"
-  [ "${#browser_secret}" -ge 32 ] || fail "JWT_SECRET must contain at least 32 characters"
-  [ "${#gateway_secret}" -ge 32 ] || fail "FINANCE_GATEWAY_SECRET must contain at least 32 characters"
-  [ -n "${CLIENT_URL:-}" ] || fail "CLIENT_URL must be an explicit browser origin"
-  [ -n "${FINANCE_PROVIDER_CONTRACTS:-}" ] || fail "FINANCE_PROVIDER_CONTRACTS must define approved providers"
-  (cd "$ROOT_DIR/backend" && node -e '
-    const {parseProviderContracts,missingCapabilities}=require("./src/services/providerContracts");
-    const missing=missingCapabilities(parseProviderContracts(process.env.FINANCE_PROVIDER_CONTRACTS));
-    if(missing.length) throw new Error(`missing provider capabilities: ${missing.join(", ")}`);
-    const origins=process.env.CLIENT_URL.split(",").map((value)=>new URL(value.trim()));
-    if(!origins.length||origins.some((url)=>!["http:","https:"].includes(url.protocol)
-      ||url.origin!==url.href.replace(/\/$/,"")))
-      throw new Error("CLIENT_URL must contain HTTP(S) origins without paths");
-  ') || fail "provider contracts or CLIENT_URL are invalid"
-}
-
-if [ "${NODE_ENV:-development}" = test ]; then
-  FINANCE_GATEWAY_SECRET="${FINANCE_GATEWAY_SECRET:-runtime-acceptance-finance-gateway-secret}"
-  CLIENT_URL="${CLIENT_URL:-http://127.0.0.1:${FRONTEND_PORT:-${PORT:-3002}}}"
-  if [ -z "${FINANCE_PROVIDER_CONTRACTS:-}" ]; then
-    FINANCE_PROVIDER_CONTRACTS='[{"id":"runtime-paper","mode":"paper","contractRef":"runtime:disposable-validation","capabilities":["market-data","custody-snapshot","paper-fill","corporate-action","custody-reconciliation"]}]'
-  fi
-  export FINANCE_GATEWAY_SECRET CLIENT_URL FINANCE_PROVIDER_CONTRACTS
-fi
-
-case "${1:-backend}" in
-  check)
-    check
-    ;;
-  migrate)
-    check
-    [ "${ALLOW_SCHEMA_MIGRATION:-0}" = 1 ] || fail "set ALLOW_SCHEMA_MIGRATION=1 for the approved migration step"
-    [ -x "$ROOT_DIR/backend/node_modules/.bin/prisma" ] || fail "backend dependencies are missing"
-    command -v psql >/dev/null 2>&1 || fail "psql is required"
-    (cd "$ROOT_DIR/backend" && ./node_modules/.bin/prisma migrate deploy)
-    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$ROOT_DIR/migrations/001_governed_paper_trading.sql"
-    ;;
-  backend)
-    check
-    [ -d "$ROOT_DIR/backend/node_modules" ] || fail "backend dependencies are missing; install explicitly"
-    cd "$ROOT_DIR/backend"
-    exec npm start
-    ;;
-  frontend)
-    check
-    [ -d "$ROOT_DIR/frontend/node_modules" ] || fail "frontend dependencies are missing; install explicitly"
-    [ -d "$ROOT_DIR/frontend/build" ] || fail "frontend production build is missing; build explicitly"
-    cd "$ROOT_DIR/frontend"
-    exec node scripts/serve-build.cjs
-    ;;
-  *) fail "usage: ./start.sh [check|migrate|backend|frontend]" ;;
-esac
+[ -d "$PROJECT_DIR/frontend/node_modules" ]&&[ -d "$PROJECT_DIR/frontend/build" ]||{ echo "Frontend build or dependencies missing" >&2;exit 1; }
+: "${ALLOW_SCHEMA_MIGRATION:=0}";export ALLOW_SCHEMA_MIGRATION
+export RUNTIME_PROJECT_NAME=aiFinancePlatform RUNTIME_AI_ENDPOINT=/api/ai/finance-review RUNTIME_AI_FEATURE=finance-review
+export RUNTIME_AI_SYSTEM_PROMPT='You are a financial operations assistant. Provide educational, risk-aware analysis with assumptions and verification steps, not individualized investment instructions.'
+node "$PROJECT_DIR/runtime/setup.mjs"
+CHILD_PIDS=()
+(cd "$PROJECT_DIR"&&exec node runtime/api.mjs)&CHILD_PIDS+=("$!")
+(cd "$PROJECT_DIR/frontend"&&exec node scripts/serve-build.cjs)&CHILD_PIDS+=("$!")
+cleanup(){ trap - EXIT INT TERM;for pid in "${CHILD_PIDS[@]}";do kill "$pid" 2>/dev/null||true;done;for pid in "${CHILD_PIDS[@]}";do wait "$pid" 2>/dev/null||true;done; }
+trap cleanup EXIT INT TERM
+wait "${CHILD_PIDS[@]}"
