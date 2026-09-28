@@ -6,7 +6,9 @@ const path = require('node:path');
 
 const root = path.resolve(__dirname, '../build');
 const port = Number(process.env.FRONTEND_PORT || 3000);
+const backendPort = Number(process.env.BACKEND_PORT || 3001);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('FRONTEND_PORT must be valid');
+if (!Number.isInteger(backendPort) || backendPort < 1 || backendPort > 65535) throw new Error('BACKEND_PORT must be valid');
 
 const types = new Map([
   ['.css', 'text/css; charset=utf-8'], ['.html', 'text/html; charset=utf-8'],
@@ -17,6 +19,21 @@ const types = new Map([
 
 http.createServer((request, response) => {
   const pathname = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
+  if (pathname === '/api' || pathname.startsWith('/api/')) {
+    const proxyRequest = http.request({
+      hostname: '127.0.0.1',
+      port: backendPort,
+      method: request.method,
+      path: request.url,
+      headers: { ...request.headers, host: `127.0.0.1:${backendPort}` },
+    }, (proxyResponse) => {
+      response.writeHead(proxyResponse.statusCode || 502, proxyResponse.headers);
+      proxyResponse.pipe(response);
+    });
+    proxyRequest.on('error', () => response.writeHead(502).end('Backend unavailable'));
+    request.pipe(proxyRequest);
+    return;
+  }
   const requested = path.resolve(root, `.${pathname}`);
   const candidate = requested.startsWith(`${root}${path.sep}`) && fs.existsSync(requested) && fs.statSync(requested).isFile()
     ? requested : path.join(root, 'index.html');
