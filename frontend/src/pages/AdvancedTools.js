@@ -1,3 +1,5 @@
+import AIPresetButtons from '../components/AIPresetButtons';
+import FormattedAIReport from "../components/FormattedAIReport";
 import React, { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import {
@@ -102,6 +104,7 @@ function AdvancedTools() {
       {tab === 'fraud' && (
         <div className="card">
           <h2><Sparkles size={18} /> Fraud Detection</h2>
+          <AIPresetButtons presets={[ { label: "Coffee and transfer", value: ["[{\"amount\": 5.75, \"merchant\": \"Cafe\", \"mcc\": \"5814\"}, {\"amount\": 4200, \"merchant\": \"Wire service\", \"mcc\": \"4829\"}]", "{\"avgTransactionUSD\": 85, \"country\": \"US\"}"] }, { label: "Travel spending", value: ["[{\"amount\": 78, \"merchant\": \"Airport dining\", \"mcc\": \"5812\"}, {\"amount\": 630, \"merchant\": \"Hotel\", \"mcc\": \"7011\"}]", "{\"avgTransactionUSD\": 120, \"country\": \"US\"}"] } ]} onSelect={(value) => { setFraudJson(value[0]); setFraudBaseline(value[1]); }} />
           <div className="form-group">
             <label>Transactions JSON</label>
             <textarea value={fraudJson} onChange={e => setFraudJson(e.target.value)} rows={8} style={{ width: '100%', fontFamily: 'monospace' }} />
@@ -117,6 +120,7 @@ function AdvancedTools() {
       {tab === 'bill' && (
         <div className="card">
           <h2><Sparkles size={18} /> Bill Negotiator</h2>
+          <AIPresetButtons presets={[ { label: "Internet bill", value: ["FiberNet", 95, "internet", 24, "Competitor fiber $65/mo"] }, { label: "Mobile plan", value: ["Metro Mobile", 145, "mobile", 48, "Competitor family plan $105/mo"] } ]} onSelect={(value) => { setBnProvider(value[0]); setBnBill(value[1]); setBnType(value[2]); setBnTenure(value[3]); setBnComp(value[4]); }} />
           <div className="form-grid">
             <div className="form-group"><label>Provider</label><input value={bnProvider} onChange={e => setBnProvider(e.target.value)} /></div>
             <div className="form-group"><label>Bill type</label><input value={bnType} onChange={e => setBnType(e.target.value)} /></div>
@@ -131,6 +135,7 @@ function AdvancedTools() {
       {tab === 'agentic' && (
         <div className="card">
           <h2><Sparkles size={18} /> Agentic Advisor</h2>
+          <AIPresetButtons presets={[ { label: "Home purchase", value: ["[{\"name\":\"Home down payment\",\"amount\":80000,\"deadlineYears\":4}]", "{\"stocks\":50,\"bonds\":35,\"cash\":15}"] }, { label: "Retirement planning", value: ["[{\"name\":\"Retirement\",\"amount\":1200000,\"deadlineYears\":22}]", "{\"stocks\":70,\"bonds\":25,\"cash\":5}"] } ]} onSelect={(value) => { setAgGoals(value[0]); setAgPortfolio(value[1]); }} />
           <div className="form-group">
             <label>Goals JSON</label>
             <textarea value={agGoals} onChange={e => setAgGoals(e.target.value)} rows={6} style={{ width: '100%', fontFamily: 'monospace' }} />
@@ -146,6 +151,7 @@ function AdvancedTools() {
       {tab === 'nudge' && (
         <div className="card">
           <h2><Sparkles size={18} /> Behavioral Nudges</h2>
+          <AIPresetButtons presets={[ { label: "Dining overspend", value: ["{\"overspentCategories\":[\"dining\"],\"missedSavings\":true}", "Feeling stressed about recent expenses"] }, { label: "Volatile markets", value: ["{\"overspentCategories\":[],\"missedSavings\":false}", "Considering selling investments after a market decline"] } ]} onSelect={(value) => { setNudgeBeh(value[0]); setNudgeEmotion(value[1]); }} />
           <div className="form-group">
             <label>Recent behavior JSON</label>
             <textarea value={nudgeBeh} onChange={e => setNudgeBeh(e.target.value)} rows={4} style={{ width: '100%', fontFamily: 'monospace' }} />
@@ -161,6 +167,7 @@ function AdvancedTools() {
       {tab === 'espp' && (
         <div className="card">
           <h2><Sparkles size={18} /> ESPP / RSU Optimize</h2>
+          <AIPresetButtons presets={[ { label: "Standard plan", value: ["{\"discountPct\":15,\"lookback\":true,\"employerTicker\":\"ACME\"}", "[{\"shares\":120,\"vestDate\":\"2027-03-15\",\"ticker\":\"ACME\"}]", 145000, 28] }, { label: "Large grant", value: ["{\"discountPct\":10,\"lookback\":false,\"employerTicker\":\"NOVA\"}", "[{\"shares\":450,\"vestDate\":\"2027-06-15\",\"ticker\":\"NOVA\"}]", 210000, 32] } ]} onSelect={(value) => { setEsppPlan(value[0]); setRsuGrants(value[1]); setSalary(value[2]); setTaxBracket(value[3]); }} />
           <div className="form-group">
             <label>ESPP plan JSON</label>
             <textarea value={esppPlan} onChange={e => setEsppPlan(e.target.value)} rows={4} style={{ width: '100%', fontFamily: 'monospace' }} />
@@ -210,7 +217,7 @@ function AdvancedTools() {
       {result && (
         <div className="card">
           <h3>Result</h3>
-          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 600, overflow: 'auto' }}>{JSON.stringify(result, null, 2)}</pre>
+          <FormattedAIReport response={result} />
         </div>
       )}
     </div>

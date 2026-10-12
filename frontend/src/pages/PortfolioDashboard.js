@@ -1,3 +1,4 @@
+import { listPayload } from '../services/listPayload';
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
@@ -72,7 +73,7 @@ function PortfolioDashboard() {
     try {
       const response = await getPortfolios();
       const result = response.data;
-      const items = result.data || result;
+      const items = listPayload(result).data;
       setPortfolios(items);
       if (items.length > 0) {
         setSelectedPortfolio(items[0]);

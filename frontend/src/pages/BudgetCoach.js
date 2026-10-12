@@ -1,3 +1,5 @@
+import { listPayload } from '../services/listPayload';
+import FormattedAIReport from '../components/FormattedAIReport';
 import React, { useState, useEffect } from 'react';
 import { Wallet, PieChart, Lightbulb, Plus, Edit2, Trash2 } from 'lucide-react';
 import { getBudgetPlans, addBudgetPlan, deleteBudgetPlan, analyzeBudgetPlan, updateBudgetPlan, getExpenses, addExpense, deleteExpense, getExpenseSummary, bulkDeleteBudgetPlans, exportBudgetPlans, bulkDeleteExpenses, exportExpenses, downloadExport } from '../services/api';
@@ -47,7 +49,7 @@ function BudgetCoach() {
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
   const [offset, setOffset] = useState(0);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(20);
   const [total, setTotal] = useState(0);
 
   // Bulk selection & confirm dialog
@@ -65,9 +67,10 @@ function BudgetCoach() {
         getExpenseSummary('month')
       ]);
       const plansResult = plansRes.data;
-      setPlans(plansResult.data || plansResult);
-      setTotal(plansResult.total || (plansResult.data || plansResult).length);
-      setExpenses(expensesRes.data);
+      const { data, total } = listPayload(plansResult);
+      setPlans(data);
+      setTotal(total);
+      setExpenses(listPayload(expensesRes.data).data);
       setSummary(summaryRes.data);
     } catch (error) {
       console.error('Failed to load data:', error);
@@ -458,6 +461,7 @@ function BudgetCoach() {
                 ))}
               </div>
 
+              {selectedPlan.analysis && <FormattedAIReport response={selectedPlan.analysis} title="Complete AI analysis" />}
               {selectedPlan.analysis && (
                 <div className="ai-analysis-section">
                   <h3>AI Budget Coaching</h3>

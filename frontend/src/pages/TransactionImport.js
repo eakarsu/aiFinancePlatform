@@ -1,3 +1,4 @@
+import { listPayload } from '../services/listPayload';
 import React, { useState, useEffect } from 'react';
 import { Upload, FileText, Plus, Calendar, ShoppingCart, Banknote, ArrowLeftRight, RotateCcw, Building2, Coffee, Fuel, ShoppingBag, CheckCircle, XCircle, ClipboardList, FolderUp, Download, Edit2, Trash2, Inbox } from 'lucide-react';
 import {
@@ -48,7 +49,7 @@ function TransactionImport() {
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
   const [offset, setOffset] = useState(0);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(20);
   const [total, setTotal] = useState(0);
 
   // Bulk selection & confirm dialog
@@ -102,8 +103,9 @@ function TransactionImport() {
     try {
       const response = await getImportHistory({ search, sortBy, sortOrder, offset, limit });
       const result = response.data;
-      setImportHistory(result.data || result);
-      setTotal(result.total || (result.data || result).length);
+      const { data, total } = listPayload(result);
+      setImportHistory(data);
+      setTotal(total);
     } catch (error) {
       console.error('Failed to load import history:', error);
     }

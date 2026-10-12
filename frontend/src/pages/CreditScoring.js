@@ -1,3 +1,5 @@
+import { listPayload } from '../services/listPayload';
+import FormattedAIReport from '../components/FormattedAIReport';
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CreditCard, TrendingUp, AlertTriangle, CheckCircle, Clock, FileText } from 'lucide-react';
@@ -117,8 +119,9 @@ function CreditScoring() {
         limit: historyLimit
       });
       const result = response.data;
-      setCreditHistories(result.data || result);
-      setHistoryTotal(result.total || (result.data || result).length);
+      const { data, total } = listPayload(result);
+      setCreditHistories(data);
+      setHistoryTotal(total);
     } catch (error) {
       console.error('Failed to load credit histories:', error);
     } finally {
@@ -405,6 +408,7 @@ function CreditScoring() {
               </div>
 
               {/* AI Analysis Results */}
+              {aiAnalysis && <FormattedAIReport response={aiAnalysis} title="Complete AI analysis" />}
               {aiAnalysis && (
                 <div ref={aiResultsRef} className="portfolio-analysis-card" style={{ marginTop: '1.5rem' }}>
                   <div className="portfolio-header">

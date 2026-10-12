@@ -1,3 +1,5 @@
+import { listPayload } from '../services/listPayload';
+import FormattedAIReport from '../components/FormattedAIReport';
 import React, { useState, useEffect } from 'react';
 import { Palmtree, Calendar, TrendingUp, Plus, Edit2, Trash2 } from 'lucide-react';
 import { getRetirementPlans, addRetirementPlan, deleteRetirementPlan, analyzeRetirementPlan, updateRetirementPlan, calculateRetirementProjection, bulkDeleteRetirementPlans, exportRetirementPlans, downloadExport } from '../services/api';
@@ -42,8 +44,9 @@ function RetirementPlanner() {
       setLoading(true);
       const response = await getRetirementPlans({ search, sortBy, sortOrder, offset, limit });
       const result = response.data;
-      setPlans(result.data || result);
-      setTotal(result.total || (result.data || result).length);
+      const { data, total } = listPayload(result);
+      setPlans(data);
+      setTotal(total);
     } catch (error) {
       console.error('Failed to load plans:', error);
     } finally {
@@ -338,6 +341,7 @@ function RetirementPlanner() {
                 <div className="summary-item"><label>Current Savings</label><span>${selectedPlan.currentSavings?.toLocaleString()}</span></div>
               </div>
 
+              {selectedPlan.analysis && <FormattedAIReport response={selectedPlan.analysis} title="Complete AI analysis" />}
               {selectedPlan.analysis && (
                 <div className="ai-analysis-section">
                   <h3>AI Analysis</h3>

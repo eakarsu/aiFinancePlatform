@@ -1,3 +1,5 @@
+import { listPayload } from '../../services/listPayload';
+import FormattedAIReport from '../../components/FormattedAIReport';
 /**
  * BankModule — generic List / Detail / Create-Edit / AI-Verbs panel
  * Used by all 11 Core Banking feature pages.
@@ -45,30 +47,7 @@ function formatVal(v) {
 
 /* ─── AI Result Renderer ────────────────────────────────────────── */
 function AiResult({ data }) {
-  if (!data) return null;
-  if (typeof data !== 'object') {
-    return <pre className="bank-ai-pre">{String(data)}</pre>;
-  }
-  return (
-    <div className="bank-ai-result">
-      {Object.entries(data).map(([k, v]) => (
-        <div key={k} className="bank-ai-row">
-          <span className="bank-ai-key">{k}</span>
-          <span className="bank-ai-val">
-            {Array.isArray(v)
-              ? v.length === 0 ? '—' : v.map((item, i) =>
-                  typeof item === 'object'
-                    ? <pre key={i} className="bank-ai-sub">{JSON.stringify(item, null, 2)}</pre>
-                    : <span key={i} className="bank-ai-tag">{String(item)}</span>
-                )
-              : typeof v === 'object' && v !== null
-                ? <pre className="bank-ai-sub">{JSON.stringify(v, null, 2)}</pre>
-                : <strong>{formatVal(v)}</strong>}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
+  return <FormattedAIReport response={data} title="Bank AI analysis" />;
 }
 
 /* ─── AI Verbs Panel ────────────────────────────────────────────── */
@@ -387,8 +366,9 @@ function BankList({ module, title, columns, idVerbs, collectionVerbs, filterFiel
       if (search) params.q = search;
       const res = await client.list(params);
       const payload = res.data;
-      setRows(payload.data || payload);
-      setTotal(payload.total || (payload.data || payload).length);
+      const { data, total } = listPayload(payload);
+      setRows(data);
+      setTotal(total);
     } catch (e) {
       setError(e.response?.data?.error || e.message);
     } finally {

@@ -1,3 +1,4 @@
+import FormattedAIReport from '../components/FormattedAIReport';
 import React, { useState, useEffect, useRef } from 'react';
 import { ClipboardList, CheckCircle, ArrowRight, AlertTriangle, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -392,6 +393,7 @@ function RiskAssessment() {
         )}
 
         {/* AI Analysis Results */}
+        {aiAnalysis && <FormattedAIReport response={aiAnalysis} title="Complete AI analysis" />}
         {aiAnalysis && (
           <div ref={aiResultsRef} className="portfolio-analysis-card">
             <div className="portfolio-header">

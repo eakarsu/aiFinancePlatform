@@ -1,9 +1,16 @@
+import AIPresetButtons from '../components/AIPresetButtons';
+import FormattedAIReport from "../components/FormattedAIReport";
 import React, { useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 import { Bot, Sparkles } from 'lucide-react';
 import { aiAssetAllocation } from '../services/api';
 
 const COLORS = ['#4CAF50', '#2196F3', '#FF9800', '#9C27B0', '#F44336', '#00BCD4', '#8BC34A', '#FF5722'];
+
+const presets = [
+  { label: "Early career growth", value: {"riskTolerance": "AGGRESSIVE", "investmentGoal": "growth", "timeHorizon": 30, "age": 28, "investmentAmount": 15000} },
+  { label: "Near retirement income", value: {"riskTolerance": "CONSERVATIVE", "investmentGoal": "income", "timeHorizon": 5, "age": 61, "investmentAmount": 180000} }
+];
 
 function AssetAllocation() {
   const [form, setForm] = useState({
@@ -53,6 +60,7 @@ function AssetAllocation() {
       <div className="card">
         <h2><Sparkles size={18} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Your Profile</h2>
         <form onSubmit={handleSubmit}>
+          <AIPresetButtons presets={presets} onSelect={setForm} />
           <div className="form-grid">
             <div className="form-group">
               <label>Risk Tolerance</label>
@@ -143,7 +151,7 @@ function AssetAllocation() {
                 </div>
               </div>
             ) : (
-              <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>{JSON.stringify(result, null, 2)}</pre>
+              <FormattedAIReport response={result} />
             )}
           </div>
           {result.reasoning && (

@@ -1,3 +1,5 @@
+import { listPayload } from '../services/listPayload';
+import FormattedAIReport from '../components/FormattedAIReport';
 import React, { useState, useEffect } from 'react';
 import { Building2, DollarSign, Calculator, Plus, Edit2, Trash2 } from 'lucide-react';
 import { getLoans, addLoan, deleteLoan, analyzeLoan, updateLoan, calculateLoanPayment, bulkDeleteLoans, exportLoans, downloadExport } from '../services/api';
@@ -40,8 +42,9 @@ function LoanAdvisor() {
       setLoading(true);
       const response = await getLoans({ search, sortBy, sortOrder, offset, limit });
       const result = response.data;
-      setLoans(result.data || result);
-      setTotal(result.total || (result.data || result).length);
+      const { data, total } = listPayload(result);
+      setLoans(data);
+      setTotal(total);
     } catch (error) {
       console.error('Failed to load loans:', error);
     } finally {
@@ -308,6 +311,7 @@ function LoanAdvisor() {
                 </div>
               </div>
 
+              {selectedLoan.analysis && <FormattedAIReport response={selectedLoan.analysis} title="Complete AI analysis" />}
               {selectedLoan.analysis && (
                 <div className="ai-analysis-section">
                   <h3>AI Loan Analysis</h3>

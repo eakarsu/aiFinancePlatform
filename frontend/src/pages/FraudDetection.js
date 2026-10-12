@@ -1,3 +1,4 @@
+import { listPayload } from '../services/listPayload';
 import React, { useState, useEffect } from 'react';
 import { Shield, AlertTriangle, CheckCircle, Eye, BarChart3, Search, Edit2, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -64,9 +65,10 @@ function FraudDetection() {
         api.getFraudStats()
       ]);
       const result = transRes.data;
-      setTransactions(result.data || result);
-      setTotal(result.total || (result.data || result).length);
-      setAlerts(alertRes.data);
+      const { data, total } = listPayload(result);
+      setTransactions(data);
+      setTotal(total);
+      setAlerts(listPayload(alertRes.data).data);
       setStats(statsRes.data);
     } catch (error) {
       console.error('Failed to load data:', error);

@@ -1,6 +1,13 @@
+import AIPresetButtons from '../components/AIPresetButtons';
+import FormattedAIReport from "../components/FormattedAIReport";
 import React, { useState } from 'react';
 import { Bot, Sparkles } from 'lucide-react';
 import { aiStockRecommend } from '../services/api';
+
+const presets = [
+  { label: "Balanced income", value: {"riskProfile": "moderate", "sectorsCSV": "Healthcare, Utilities", "maxRecommendations": 5, "capitalUSD": 25000} },
+  { label: "Long horizon growth", value: {"riskProfile": "aggressive", "sectorsCSV": "Technology, Industrials", "maxRecommendations": 8, "capitalUSD": 50000} }
+];
 
 function StockRecommend() {
   const [form, setForm] = useState({
@@ -54,6 +61,7 @@ function StockRecommend() {
       <div className="card">
         <h2><Sparkles size={18} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Your Profile</h2>
         <form onSubmit={handleSubmit}>
+          <AIPresetButtons presets={presets} onSelect={setForm} />
           <div className="form-grid">
             <div className="form-group">
               <label>Risk Profile</label>
@@ -123,7 +131,7 @@ function StockRecommend() {
                 ))}
               </div>
             ) : (
-              <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>{JSON.stringify(result, null, 2)}</pre>
+              <FormattedAIReport response={result} />
             )}
             {result?.analysis?.disclaimer && (
               <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 12 }}>

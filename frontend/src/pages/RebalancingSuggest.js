@@ -1,6 +1,13 @@
+import AIPresetButtons from '../components/AIPresetButtons';
+import FormattedAIReport from "../components/FormattedAIReport";
 import React, { useState } from 'react';
 import { RefreshCw, Plus, Trash2, Bot } from 'lucide-react';
 import { aiRebalancingSuggest } from '../services/api';
+
+const presets = [
+  { label: "Balanced ETFs", value: {"holdings": [{"symbol": "VTI", "assetClass": "US Equity", "value": 6500}, {"symbol": "BND", "assetClass": "Bonds", "value": 2500}, {"symbol": "VXUS", "assetClass": "Intl Equity", "value": 1000}], "target": [{"assetClass": "US Equity", "percentage": 50}, {"assetClass": "Bonds", "percentage": 30}, {"assetClass": "Intl Equity", "percentage": 20}], "riskTolerance": "MODERATE"} },
+  { label: "Conservative income", value: {"holdings": [{"symbol": "VTI", "assetClass": "US Equity", "value": 12000}, {"symbol": "BND", "assetClass": "Bonds", "value": 25000}, {"symbol": "VXUS", "assetClass": "Intl Equity", "value": 3000}], "target": [{"assetClass": "US Equity", "percentage": 25}, {"assetClass": "Bonds", "percentage": 65}, {"assetClass": "Intl Equity", "percentage": 10}], "riskTolerance": "CONSERVATIVE"} }
+];
 
 function RebalancingSuggest() {
   const [holdings, setHoldings] = useState([
@@ -64,6 +71,7 @@ function RebalancingSuggest() {
       </div>
 
       <form onSubmit={handleSubmit}>
+        <AIPresetButtons presets={presets} onSelect={(value) => { setHoldings(value.holdings); setTarget(value.target); setRiskTolerance(value.riskTolerance); }} />
         <div className="card">
           <h2>Current Holdings</h2>
           {holdings.map((h, i) => (
@@ -167,7 +175,7 @@ function RebalancingSuggest() {
               </tbody>
             </table>
           ) : (
-            <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>{JSON.stringify(result, null, 2)}</pre>
+            <FormattedAIReport response={result} />
           )}
           {result.reasoning && (
             <>

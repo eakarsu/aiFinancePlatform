@@ -1,6 +1,13 @@
+import FormattedAIReport from '../components/FormattedAIReport';
+import AIPresetButtons from '../components/AIPresetButtons';
 import React, { useState } from 'react';
 import { Bot, Sparkles } from 'lucide-react';
 import { aiRetirementProject } from '../services/api';
+
+const presets = [
+  { label: "Steady saver", value: {"currentAge": 35, "retirementAge": 67, "currentSavings": 60000, "monthlyContribution": 900, "expectedReturnPct": 6, "targetAnnualIncome": 75000, "lifeExpectancy": 92} },
+  { label: "Catch up plan", value: {"currentAge": 52, "retirementAge": 68, "currentSavings": 240000, "monthlyContribution": 1800, "expectedReturnPct": 5, "targetAnnualIncome": 90000, "lifeExpectancy": 95} }
+];
 
 function RetirementProject() {
   const [form, setForm] = useState({
@@ -56,6 +63,7 @@ function RetirementProject() {
       <div className="card">
         <h2><Sparkles size={18} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Inputs</h2>
         <form onSubmit={handleSubmit}>
+          <AIPresetButtons presets={presets} onSelect={setForm} />
           <div className="form-grid">
             <div className="form-group">
               <label>Current Age</label>
@@ -112,6 +120,8 @@ function RetirementProject() {
           <p>Running retirement projection...</p>
         </div>
       )}
+
+      {result && !loading && <FormattedAIReport response={result} title="Retirement projection" />}
 
       {result && !loading && a && (
         <>

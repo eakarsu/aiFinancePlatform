@@ -1,3 +1,5 @@
+import { listPayload } from '../services/listPayload';
+import FormattedAIReport from '../components/FormattedAIReport';
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, Activity, Zap, ArrowRight, BarChart3, Plus, Edit2, Trash2 } from 'lucide-react';
 import { getCryptos, addCrypto, deleteCrypto, analyzeCrypto, analyzeAllCryptos, updateCrypto, toggleCryptoTracking, bulkDeleteCryptos, exportCryptos, downloadExport } from '../services/api';
@@ -41,8 +43,9 @@ function CryptoAnalyzer() {
       setLoading(true);
       const response = await getCryptos({ search, sortBy, sortOrder, offset, limit });
       const result = response.data;
-      setCryptos(result.data || result);
-      setTotal(result.total || (result.data || result).length);
+      const { data, total } = listPayload(result);
+      setCryptos(data);
+      setTotal(total);
     } catch (error) {
       console.error('Failed to load cryptos:', error);
     } finally {
@@ -406,6 +409,7 @@ function CryptoAnalyzer() {
                 </div>
               </div>
 
+              {selectedCrypto.aiAnalysis && <FormattedAIReport response={selectedCrypto.aiAnalysis} title="Complete AI analysis" />}
               {selectedCrypto.aiAnalysis && (
                 <div className="ai-analysis-section">
                   <h3>AI Analysis</h3>

@@ -1,3 +1,4 @@
+import { listPayload } from '../services/listPayload';
 import React, { useState, useEffect } from 'react';
 import { Target, CheckCircle, AlertTriangle, Plus, Edit2, Trash2 } from 'lucide-react';
 import { getGoals, addGoal, deleteGoal, analyzeGoal, updateGoal, contributeToGoal, analyzeAllGoals, bulkDeleteGoals, exportGoals, downloadExport } from '../services/api';
@@ -38,7 +39,7 @@ function GoalTracker() {
   const [sortBy, setSortBy] = useState('createdAt');
   const [sortOrder, setSortOrder] = useState('desc');
   const [offset, setOffset] = useState(0);
-  const [limit, setLimit] = useState(10);
+  const [limit, setLimit] = useState(20);
   const [total, setTotal] = useState(0);
 
   // Bulk selection & confirm dialog
@@ -52,8 +53,9 @@ function GoalTracker() {
       setLoading(true);
       const response = await getGoals({ search, sortBy, sortOrder, offset, limit });
       const result = response.data;
-      setGoals(result.data || result);
-      setTotal(result.total || (result.data || result).length);
+      const { data, total } = listPayload(result);
+      setGoals(data);
+      setTotal(total);
     } catch (error) {
       console.error('Failed to load goals:', error);
     } finally {

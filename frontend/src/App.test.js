@@ -12,6 +12,6 @@ test('unauthenticated visitors reach the sign-in screen without exposing embedde
   expect(screen.getByLabelText(/email address/i)).toHaveValue('');
   expect(screen.getByLabelText(/^password$/i)).toHaveValue('');
   expect(screen.queryByText(/quick demo login/i)).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Auto Fill Demo Credentials' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Fill demo credentials' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Sign In' })).toBeInTheDocument();
 });

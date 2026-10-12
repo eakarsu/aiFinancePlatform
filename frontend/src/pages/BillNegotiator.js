@@ -1,3 +1,4 @@
+import { listPayload } from '../services/listPayload';
 import React, { useState, useEffect } from 'react';
 import { Phone, TrendingDown, Plus, Edit2, Trash2 } from 'lucide-react';
 import { getBills, addBill, deleteBill, updateBill, getNegotiationStrategy, recordNegotiation, analyzeAllBills, bulkDeleteBills, exportBills, downloadExport } from '../services/api';
@@ -44,8 +45,9 @@ function BillNegotiator() {
       setLoading(true);
       const response = await getBills({ search, sortBy, sortOrder, offset, limit });
       const result = response.data;
-      setBills(result.data || result);
-      setTotal(result.total || (result.data || result).length);
+      const { data, total } = listPayload(result);
+      setBills(data);
+      setTotal(total);
     } catch (error) {
       console.error('Failed to load bills:', error);
     } finally {

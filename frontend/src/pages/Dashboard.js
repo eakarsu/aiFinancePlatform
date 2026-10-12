@@ -1,3 +1,4 @@
+import { listPayload } from '../services/listPayload';
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -30,9 +31,7 @@ function Dashboard() {
 
       // getPortfolios uses paginatedQuery which returns { data: [], total, offset, limit }.
       // Older code did portfolioRes.data.reduce(...) which threw on the wrapper object.
-      const portfolios = Array.isArray(portfolioRes.data)
-        ? portfolioRes.data
-        : (portfolioRes.data?.data || []);
+      const portfolios = listPayload(portfolioRes.data).data;
       const totalValue = portfolios.reduce((sum, p) => sum + (p.totalValue || 0), 0);
 
       setStats({

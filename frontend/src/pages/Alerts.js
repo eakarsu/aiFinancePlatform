@@ -1,3 +1,4 @@
+import { listPayload } from '../services/listPayload';
 import React, { useState, useEffect } from 'react';
 import { Bell, Shield, CreditCard, TrendingUp, Lock, Wallet, ClipboardList, Megaphone, Trash2 } from 'lucide-react';
 import {
@@ -81,9 +82,10 @@ function Alerts() {
 
       const response = await getNotifications(params);
       const result = response.data;
-      setNotifications(result.notifications || result.data || result);
+      const { data, total } = listPayload(result, 'notifications');
+      setNotifications(data);
       setCounts(result.counts || { total: 0 });
-      setTotal(result.total || (result.notifications || result.data || result).length);
+      setTotal(total);
     } catch (error) {
       console.error('Failed to load notifications:', error);
     } finally {

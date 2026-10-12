@@ -1,6 +1,13 @@
+import AIPresetButtons from '../components/AIPresetButtons';
+import FormattedAIReport from "../components/FormattedAIReport";
 import React, { useState } from 'react';
 import { Bot, Sparkles } from 'lucide-react';
 import { aiInsuranceRecommend } from '../services/api';
+
+const presets = [
+  { label: "Young family", value: {"age": 34, "dependents": 2, "annualIncome": 95000, "existingPoliciesCSV": "auto, employer health", "goalsCSV": "income replacement, education funding", "healthStatus": "good"} },
+  { label: "Independent consultant", value: {"age": 48, "dependents": 0, "annualIncome": 130000, "existingPoliciesCSV": "health, renters", "goalsCSV": "disability protection, retirement security", "healthStatus": "average"} }
+];
 
 function InsuranceRecommend() {
   const [form, setForm] = useState({
@@ -54,6 +61,7 @@ function InsuranceRecommend() {
       <div className="card">
         <h2><Sparkles size={18} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Your Situation</h2>
         <form onSubmit={handleSubmit}>
+          <AIPresetButtons presets={presets} onSelect={setForm} />
           <div className="form-grid">
             <div className="form-group">
               <label>Age</label>
@@ -134,7 +142,7 @@ function InsuranceRecommend() {
                 ))}
               </div>
             ) : (
-              <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>{JSON.stringify(result, null, 2)}</pre>
+              <FormattedAIReport response={result} />
             )}
             {Array.isArray(result?.analysis?.coverage_gaps) && result.analysis.coverage_gaps.length > 0 && (
               <div style={{ marginTop: 16 }}>

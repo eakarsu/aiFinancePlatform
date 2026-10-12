@@ -1,6 +1,13 @@
+import AIPresetButtons from '../components/AIPresetButtons';
+import FormattedAIReport from "../components/FormattedAIReport";
 import React, { useState } from 'react';
 import { Wallet, Plus, Trash2, Bot } from 'lucide-react';
 import { aiBudgetOptimize } from '../services/api';
+
+const presets = [
+  { label: "Urban renter", value: {"income": 5200, "expenses": [{"category": "Housing", "amount": 1900}, {"category": "Groceries", "amount": 550}, {"category": "Transportation", "amount": 420}, {"category": "Utilities", "amount": 230}, {"category": "Dining", "amount": 350}], "savingsGoal": 900} },
+  { label: "Family budget", value: {"income": 9200, "expenses": [{"category": "Mortgage", "amount": 2800}, {"category": "Childcare", "amount": 1500}, {"category": "Groceries", "amount": 1100}, {"category": "Transport", "amount": 750}, {"category": "Insurance", "amount": 520}], "savingsGoal": 1600} }
+];
 
 function BudgetOptimize() {
   const [income, setIncome] = useState(5000);
@@ -55,6 +62,7 @@ function BudgetOptimize() {
       </div>
 
       <form onSubmit={handleSubmit}>
+        <AIPresetButtons presets={presets} onSelect={(value) => { setIncome(value.income); setExpenses(value.expenses); setSavingsGoal(value.savingsGoal); }} />
         <div className="card">
           <h2><Wallet size={18} style={{ verticalAlign: 'middle', marginRight: 6 }} /> Income & Goals</h2>
           <div className="form-grid">
@@ -132,7 +140,7 @@ function BudgetOptimize() {
               ))}
             </ul>
           ) : (
-            <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem' }}>{JSON.stringify(result, null, 2)}</pre>
+            <FormattedAIReport response={result} />
           )}
           {result.summary && (
             <>

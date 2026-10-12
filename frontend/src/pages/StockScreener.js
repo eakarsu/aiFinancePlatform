@@ -1,3 +1,4 @@
+import { listPayload } from '../services/listPayload';
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, TrendingDown, ArrowRight, Star, StarOff, Edit2, Trash2, Plus } from 'lucide-react';
 import SearchBar from '../components/SearchBar';
@@ -43,8 +44,9 @@ function StockScreener() {
     try {
       const response = await getStocks({ search, sortBy, sortOrder, offset, limit });
       const result = response.data;
-      setStocks(result.data || result);
-      setTotal(result.total || (result.data || result).length);
+      const { data, total } = listPayload(result);
+      setStocks(data);
+      setTotal(total);
     } catch (error) {
       console.error('Failed to load stocks:', error);
     } finally {

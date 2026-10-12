@@ -1,3 +1,4 @@
+import { listPayload } from '../services/listPayload';
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
@@ -87,8 +88,9 @@ function RoboAdvisor() {
       setLoading(true);
       const response = await api.getPortfolios({ search, sortBy, sortOrder, offset, limit });
       const result = response.data;
-      setPortfolios(result.data || result);
-      setTotal(result.total || (result.data || result).length);
+      const { data, total } = listPayload(result);
+      setPortfolios(data);
+      setTotal(total);
     } catch (error) {
       console.error('Failed to load portfolios:', error);
     } finally {

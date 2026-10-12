@@ -1,3 +1,5 @@
+import { listPayload } from '../services/listPayload';
+import FormattedAIReport from '../components/FormattedAIReport';
 import React, { useState, useEffect } from 'react';
 import { ShieldCheck, Plus, Edit2, Trash2 } from 'lucide-react';
 import { getInsurancePolicies, addInsurancePolicy, deleteInsurancePolicy, analyzeInsurancePolicy, updateInsurancePolicy, optimizeInsurancePortfolio, bulkDeleteInsurance, exportInsurance, downloadExport } from '../services/api';
@@ -41,8 +43,9 @@ function InsuranceOptimizer() {
       setLoading(true);
       const response = await getInsurancePolicies({ search, sortBy, sortOrder, offset, limit });
       const result = response.data;
-      setPolicies(result.data || result);
-      setTotal(result.total || (result.data || result).length);
+      const { data, total } = listPayload(result);
+      setPolicies(data);
+      setTotal(total);
     } catch (error) {
       console.error('Failed to load policies:', error);
     } finally {
@@ -347,6 +350,7 @@ function InsuranceOptimizer() {
                 </div>
               </div>
 
+              {selectedPolicy.analysis && <FormattedAIReport response={selectedPolicy.analysis} title="Complete AI analysis" />}
               {selectedPolicy.analysis && (
                 <div className="ai-analysis-section">
                   <h3>AI Analysis</h3>
