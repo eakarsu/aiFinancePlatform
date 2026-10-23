@@ -22,6 +22,7 @@ import InsuranceOptimizer from './pages/InsuranceOptimizer';
 import RetirementPlanner from './pages/RetirementPlanner';
 import BudgetCoach from './pages/BudgetCoach';
 import GoalTracker from './pages/GoalTracker';
+import Tasks from './pages/Tasks';
 import BillNegotiator from './pages/BillNegotiator';
 import AssetAllocation from './pages/AssetAllocation';
 import RebalancingSuggest from './pages/RebalancingSuggest';
@@ -179,6 +180,14 @@ function AppLayout() {
               element={
                 <PrivateRoute>
                   <FraudDetection />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/tasks"
+              element={
+                <PrivateRoute>
+                  <Tasks />
                 </PrivateRoute>
               }
             />

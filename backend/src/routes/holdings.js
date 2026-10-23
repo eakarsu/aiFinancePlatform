@@ -4,25 +4,34 @@ const { authenticateToken } = require('../middleware/auth');
 const { callOpenRouter } = require('../services/openrouter');
 const { parseAIJson } = require('../utils/parseAIJson');
 const { aiRateLimiter } = require('../middleware/rateLimiter');
+const { filterHoldings, toCsv } = require('../utils/listTools');
+const { taxLossHarvestFallback, concentrationFallback, performanceFallback } = require('../services/aiFallback');
 
 
-// GET /api/holdings — list user's holdings across all portfolios
+// GET /api/holdings — list user's holdings across all portfolios.
+// Supports ?q= (symbol/name search), ?assetType=, ?format=csv|json.
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const prisma = req.app.get('prisma');
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
+    const where = {
+      portfolio: { userId: req.user.id },
+      ...(req.query.assetType ? { assetType: String(req.query.assetType) } : {}),
+      ...(req.query.q ? { OR: [{ symbol: { contains: String(req.query.q), mode: 'insensitive' } }, { name: { contains: String(req.query.q), mode: 'insensitive' } }] } : {}),
+    };
+
+    if (String(req.query.format || '').toLowerCase() === 'csv') {
+      const all = await prisma.holding.findMany({ where, include: { portfolio: { select: { id: true, name: true } } }, orderBy: { createdAt: 'desc' } });
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="holdings.csv"');
+      return res.send(toCsv(filterHoldings(all, req.query)));
+    }
 
     const [holdings, total] = await Promise.all([
-      prisma.holding.findMany({
-        where: { portfolio: { userId: req.user.id } },
-        include: { portfolio: { select: { id: true, name: true } } },
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.holding.count({ where: { portfolio: { userId: req.user.id } } }),
+      prisma.holding.findMany({ where, include: { portfolio: { select: { id: true, name: true } } }, skip, take: limit, orderBy: { createdAt: 'desc' } }),
+      prisma.holding.count({ where }),
     ]);
 
     res.json({
@@ -33,6 +42,24 @@ router.get('/', authenticateToken, async (req, res) => {
     console.error('Holdings list error:', error);
     res.status(500).json({ error: 'Failed to fetch holdings' });
   }
+});
+
+// GET /api/holdings/insights/concentration — deterministic, labelled fallback.
+router.get('/insights/concentration', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    const holdings = await prisma.holding.findMany({ where: { portfolio: { userId: req.user.id } } });
+    res.json(concentrationFallback(holdings));
+  } catch (error) { res.status(500).json({ error: 'Failed to build concentration summary' }); }
+});
+
+// GET /api/holdings/insights/performance — deterministic, labelled fallback.
+router.get('/insights/performance', authenticateToken, async (req, res) => {
+  try {
+    const prisma = req.app.get('prisma');
+    const holdings = await prisma.holding.findMany({ where: { portfolio: { userId: req.user.id } } });
+    res.json(performanceFallback(holdings));
+  } catch (error) { res.status(500).json({ error: 'Failed to build performance summary' }); }
 });
 
 // POST /api/holdings/tax-loss-harvest — AI tax-loss harvesting recommendations
@@ -112,10 +139,16 @@ Respond ONLY with valid JSON in this format:
   "disclaimer": "standard tax disclaimer"
 }`;
 
-    const aiResponse = await callOpenRouter(
-      prompt,
-      'You are a tax optimization expert specializing in tax-loss harvesting. Identify wash-sale-safe pairs from holdings and recommend trades to offset capital gains. Respond only with valid JSON.'
-    );
+    let aiResponse;
+    try {
+      aiResponse = await callOpenRouter(
+        prompt,
+        'You are a tax optimization expert specializing in tax-loss harvesting. Identify wash-sale-safe pairs from holdings and recommend trades to offset capital gains. Respond only with valid JSON.'
+      );
+    } catch (providerError) {
+      // No provider key or provider failure: deterministic, labelled fallback.
+      return res.json({ holdings: holdingsWithLosses, losingPositions, recommendations: taxLossHarvestFallback(holdings), aiGenerated: false, poweredBy: 'Deterministic fallback' });
+    }
 
     const recommendations = parseAIJson(aiResponse) || { raw: aiResponse };
 

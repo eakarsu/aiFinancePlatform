@@ -321,6 +321,22 @@ enum Severity {
 
 // ============== AI ANALYSIS LOGS ==============
 
+model StaffTask {
+  id          String    @id @default(uuid())
+  userId      String
+  title       String
+  description String?
+  priority    String    @default("NORMAL")
+  status      String    @default("OPEN")
+  dueAt       DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@map("staff_tasks")
+}
+
 model AIAnalysisLog {
   id          String   @id @default(uuid())
   module      String   // robo_advisor, credit_score, fraud_detection

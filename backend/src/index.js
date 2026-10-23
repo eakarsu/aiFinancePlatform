@@ -131,6 +131,7 @@ app.use('/api/retirement-planner', retirementPlannerRoutes);
 app.use('/api/budget-coach', budgetCoachRoutes);
 app.use('/api/goal-tracker', goalTrackerRoutes);
 app.use('/api/bill-negotiator', billNegotiatorRoutes);
+app.use('/api/tasks', require('./routes/tasks'));
 app.use('/api/agentic-advisor', require('./routes/agenticAdvisor'));
 app.use('/api/realtime-monitoring', require('./routes/realtimeMonitoring'));
 app.use('/api/defi-portfolio', require('./routes/defiPortfolio'));

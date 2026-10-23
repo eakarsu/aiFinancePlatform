@@ -107,6 +107,7 @@ const NAV_SECTIONS = [
   {
     title: 'Account',
     items: [
+      { to: '/tasks', label: 'Staff Tasks', Icon: ClipboardList },
       { to: '/alerts', label: 'Notifications', Icon: Bell },
       { to: '/settings', label: 'Settings', Icon: Settings },
     ],

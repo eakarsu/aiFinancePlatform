@@ -11,7 +11,7 @@
     "db:studio": "prisma studio",
     "db:seed": "node prisma/seed.js",
     "db:reset": "prisma db push --force-reset && node prisma/seed.js",
-    "test": "node --test test/tradingControls.test.js",
+    "test": "node --test test/tradingControls.test.js test/listTools.test.js",
     "test:integration": "node --test test/governedTrading.integration.test.js"
   },
   "keywords": [],

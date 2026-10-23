@@ -24,14 +24,13 @@ function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const submitLogin = async (loginEmail, loginPassword) => {
     setError('');
     setMessage('');
     setLoading(true);
 
     try {
-      const response = await apiLogin(email, password, requires2FA ? totpCode : undefined);
+      const response = await apiLogin(loginEmail, loginPassword, requires2FA ? totpCode : undefined);
       if (response.data.requires2FA) {
         setRequires2FA(true);
         setMessage('Please enter your 2FA code');
@@ -45,6 +44,19 @@ function Login() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    await submitLogin(email, password);
+  };
+
+  const handleDemoLogin = async () => {
+    const demoEmail = process.env.REACT_APP_DEMO_EMAIL || '';
+    const demoPassword = process.env.REACT_APP_DEMO_PASSWORD || '';
+    setEmail(demoEmail);
+    setPassword(demoPassword);
+    await submitLogin(demoEmail, demoPassword);
   };
 
   const handleForgotPassword = async (e) => {
@@ -312,11 +324,8 @@ function Login() {
 
                 <button
                   type="button"
-                  onClick={() => {
-                    setEmail(process.env.REACT_APP_DEMO_EMAIL || '');
-                    setPassword(process.env.REACT_APP_DEMO_PASSWORD || '');
-                  }}
-                  disabled={!process.env.REACT_APP_DEMO_EMAIL || !process.env.REACT_APP_DEMO_PASSWORD}
+                  onClick={handleDemoLogin}
+                  disabled={loading || !process.env.REACT_APP_DEMO_EMAIL || !process.env.REACT_APP_DEMO_PASSWORD}
                   aria-label="Fill demo credentials"
                   style={{ width: '100%', marginBottom: '12px', padding: '10px 14px', borderRadius: '8px', border: '1px solid currentColor', background: 'transparent', cursor: 'pointer' }}
                 >

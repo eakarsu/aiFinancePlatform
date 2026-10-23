@@ -88,8 +88,13 @@ for assigned_port in "$BACKEND_PORT" "$FRONTEND_PORT";do lsof -nP -iTCP:"$assign
 export RUNTIME_PROJECT_NAME=aiFinancePlatform RUNTIME_AI_ENDPOINT=/api/ai/finance-review RUNTIME_AI_FEATURE=finance-review
 export RUNTIME_AI_SYSTEM_PROMPT='You are a financial operations assistant. Provide educational, risk-aware analysis with assumptions and verification steps, not individualized investment instructions.'
 node "$PROJECT_DIR/runtime/setup.mjs"
+FRONTEND_ORIGIN="http://127.0.0.1:$FRONTEND_PORT"
+case ",${CORS_ORIGINS:-}," in *'*'*) echo "CORS_ORIGINS must not contain a wildcard" >&2;exit 1 ;; esac
+export CORS_ORIGIN="$FRONTEND_ORIGIN" CORS_ORIGINS="$FRONTEND_ORIGIN" CLIENT_URL="$FRONTEND_ORIGIN" PORT="$BACKEND_PORT"
+[ -n "${FINANCE_PROVIDER_CONTRACTS:-}" ] || export FINANCE_PROVIDER_CONTRACTS='[{"id":"paper-local","mode":"paper","contractRef":"internal-test-agreement","capabilities":["market-data","custody-snapshot","paper-fill","corporate-action","custody-reconciliation"]}]'
+echo "Existing administrator found; skipping provisioning"
 CHILD_PIDS=()
-(cd "$PROJECT_DIR"&&exec node runtime/api.mjs)&CHILD_PIDS+=("$!")
+(cd "$PROJECT_DIR/backend"&&exec node src/index.js)&CHILD_PIDS+=("$!")
 (cd "$PROJECT_DIR/frontend"&&exec node scripts/serve-build.cjs)&CHILD_PIDS+=("$!")
 cleanup(){ trap - EXIT INT TERM;for pid in "${CHILD_PIDS[@]}";do kill "$pid" 2>/dev/null||true;done;for pid in "${CHILD_PIDS[@]}";do wait "$pid" 2>/dev/null||true;done; }
 trap cleanup EXIT INT TERM

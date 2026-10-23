@@ -26,6 +26,7 @@ function PortfolioDashboard() {
   const [error, setError] = useState(null);
   const [hasRiskProfile, setHasRiskProfile] = useState(false);
   const [selectedHolding, setSelectedHolding] = useState(null);
+  const [holdingQuery, setHoldingQuery] = useState('');
   const [selectedAllocation, setSelectedAllocation] = useState(null);
 
   // Confirm dialog state
@@ -382,6 +383,11 @@ function PortfolioDashboard() {
         {/* Holdings Table */}
         <div className="chart-card holdings-table">
           <h3>Holdings</h3>
+          <div>
+            <input aria-label="Search holdings" placeholder="Search holdings" value={holdingQuery} onChange={(e) => setHoldingQuery(e.target.value)} />
+            <button type="button" onClick={() => { const rows = (selectedPortfolio?.holdings || []).filter(h => !holdingQuery || `${h.symbol} ${h.name}`.toLowerCase().includes(holdingQuery.toLowerCase())); const cols = ['symbol', 'name', 'assetType', 'shares', 'avgCost', 'currentPrice']; const text = [cols.join(','), ...rows.map(h => cols.map(c => h[c] ?? '').join(','))].join('\n'); const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' })); const a = document.createElement('a'); a.href = url; a.download = 'holdings.csv'; a.click(); URL.revokeObjectURL(url); }}>Export CSV</button>
+            <button type="button" onClick={() => { const rows = (selectedPortfolio?.holdings || []).filter(h => !holdingQuery || `${h.symbol} ${h.name}`.toLowerCase().includes(holdingQuery.toLowerCase())); const url = URL.createObjectURL(new Blob([JSON.stringify(rows, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = 'holdings.json'; a.click(); URL.revokeObjectURL(url); }}>Export JSON</button>
+          </div>
           {selectedPortfolio?.holdings?.length > 0 ? (
             <table>
               <thead>
@@ -395,7 +401,7 @@ function PortfolioDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {selectedPortfolio.holdings.map(h => {
+                {selectedPortfolio.holdings.filter(h => !holdingQuery || `${h.symbol} ${h.name}`.toLowerCase().includes(holdingQuery.toLowerCase())).map(h => {
                   const value = h.shares * (h.currentPrice || h.avgCost);
                   const allocation = (value / selectedPortfolio.totalValue) * 100;
                   const gainLoss = h.currentPrice ? ((h.currentPrice - h.avgCost) / h.avgCost * 100) : 0;
